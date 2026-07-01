@@ -1,0 +1,79 @@
+<style>
+  .layout-preview { height: 410px; display: flex; flex-direction: column; background: #fff; color: #2f3540; font-size: 12px; }
+  .topbar { height: 38px; border-bottom: 1px solid #dfe3e8; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
+  .top-actions { display: flex; gap: 6px; align-items: center; }
+  .pill { border: 1px solid #cfd5dc; border-radius: 10px; padding: 2px 7px; color: #626b77; }
+  .publish { background: #303742; color: #fff; border-radius: 4px; padding: 5px 9px; }
+  .workspace { flex: 1; display: flex; min-height: 0; }
+  .tree { width: 30%; border-right: 1px solid #dfe3e8; padding: 9px; background: #fafbfc; }
+  .tree-title { font-weight: 650; margin-bottom: 9px; display:flex; justify-content:space-between; }
+  .search { height: 24px; border: 1px solid #dfe3e8; border-radius: 4px; color: #9aa1ab; padding: 4px 6px; margin-bottom: 8px; }
+  .node { padding: 4px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node.active { background: #eceff3; border-radius: 4px; font-weight: 600; }
+  .indent { padding-left: 14px; }
+  .editor { flex: 1; padding: 18px 24px; overflow: hidden; }
+  .editor h4 { font-size: 20px; margin: 4px 0 6px; }
+  .meta { color: #8a929d; margin-bottom: 15px; }
+  .toolbar { border: 1px solid #dfe3e8; border-radius: 5px; padding: 6px; word-spacing: 8px; color: #68717d; }
+  .copy { margin-top: 14px; line-height: 1.65; }
+  .code { margin-top: 12px; padding: 10px; background: #f3f5f7; border-radius: 4px; color: #4f5966; font-family: ui-monospace, monospace; }
+  .inspector { width: 25%; border-left: 1px solid #dfe3e8; padding: 12px; background: #fafbfc; }
+  .field { border-bottom: 1px solid #e4e7eb; padding: 9px 0; }
+  .field b { display:block; margin-bottom:4px; }
+  .focus-tree { width: 29%; }
+  .focus-editor { padding-left: 34px; padding-right: 34px; }
+  .note { margin-top: 10px; color: #707985; font-size: 12px; line-height: 1.5; }
+</style>
+
+<h2>管理端编辑器：哪种工作台更顺手？</h2>
+<p class="subtitle">两种方案功能相同。请关注信息密度、编辑专注度和发布动作是否清晰。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="layout-preview">
+        <div class="topbar"><b>文档管理</b><div class="top-actions"><span class="pill">已发布 · 有待发布更新</span><span>预览</span><span class="publish">发布更新</span></div></div>
+        <div class="workspace">
+          <div class="tree">
+            <div class="tree-title"><span>文档树</span><span>＋</span></div><div class="search">搜索文档标题</div>
+            <div class="node">⌄ 快速开始</div><div class="node indent">　概览</div><div class="node indent active">　创建推理服务</div>
+            <div class="node">› 模型管理</div><div class="node">› API 参考</div>
+          </div>
+          <div class="editor">
+            <h4>创建推理服务</h4><div class="meta">草稿已自动保存</div><div class="toolbar">H1 H2 B I • 1. 引用 代码 图片 表格</div>
+            <div class="copy">创建推理服务前，请先准备模型制品与运行时配置。</div><div class="code">POST /v1/inference-services</div>
+          </div>
+          <div class="inspector"><b>发布设置</b><div class="field"><b>当前状态</b>已发布</div><div class="field"><b>线上版本</b>2026-06-28 14:20</div><div class="field"><b>最后编辑</b>王敏 · 刚刚</div><div class="field"><b>危险操作</b>取消发布　删除</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · 三栏管理台</h3>
+      <p>树、编辑器、发布信息同时可见。信息完整，但正文空间更窄，右栏对当前简单发布模型略显沉重。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="layout-preview">
+        <div class="topbar"><div><b>创建推理服务</b>　<span class="pill">已发布 · 有待发布更新</span></div><div class="top-actions"><span>草稿已保存</span><span>用户视角预览</span><span class="publish">发布更新</span></div></div>
+        <div class="workspace">
+          <div class="tree focus-tree">
+            <div class="tree-title"><span>文档树</span><span>＋</span></div><div class="search">搜索文档标题</div>
+            <div class="node">⌄ 快速开始</div><div class="node indent">　概览</div><div class="node indent active">　创建推理服务</div>
+            <div class="node">› 模型管理</div><div class="node">› API 参考</div>
+          </div>
+          <div class="editor focus-editor">
+            <h4>创建推理服务</h4><div class="meta">最后编辑：王敏 · 刚刚</div><div class="toolbar">H1 H2 B I • 1. 引用 代码 图片 表格 Mermaid 附件</div>
+            <div class="copy">创建推理服务前，请先准备模型制品与运行时配置。</div><div class="code">POST /v1/inference-services</div>
+            <div class="note">取消发布、删除等低频操作收进“更多”菜单；发布历史信息在点击状态标签后展开。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · 双栏专注编辑（推荐）</h3>
+      <p>树负责切换文档，顶部集中保存、预览与发布。正文空间更大，符合约 30 篇文档和简单状态模型。</p>
+    </div>
+  </div>
+</div>

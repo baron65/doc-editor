@@ -1,0 +1,53 @@
+<style>
+  .reader { height: 430px; background:#fff; color:#303640; font-size:12px; display:flex; flex-direction:column; }
+  .reader-top { height:40px; border-bottom:1px solid #e1e5ea; display:flex; align-items:center; padding:0 12px; gap:18px; }
+  .reader-top b { font-size:14px; }
+  .reader-search { margin-left:auto; width:145px; border:1px solid #dfe3e8; border-radius:4px; padding:5px 7px; color:#949ba5; }
+  .reader-main { flex:1; display:flex; min-height:0; }
+  .reader-tree { width:25%; background:#fafbfc; border-right:1px solid #e1e5ea; padding:12px 10px; }
+  .group { font-weight:650; padding:5px 4px; }
+  .doc { padding:5px 4px 5px 17px; color:#5b6470; }
+  .doc.active { color:#20252c; background:#eceff3; border-radius:4px; font-weight:600; }
+  .article { flex:1; padding:23px 34px; overflow:hidden; line-height:1.62; }
+  .article h4 { font-size:23px; margin:0 0 6px; }
+  .article .updated { color:#9299a3; margin-bottom:18px; }
+  .article h5 { font-size:15px; margin:17px 0 6px; }
+  .article-code { padding:11px; border-radius:5px; background:#f3f5f7; font-family:ui-monospace, monospace; color:#4b5663; }
+  .callout { border-left:3px solid #aab1bb; background:#f7f8fa; padding:8px 10px; margin:12px 0; }
+  .outline { width:20%; padding:22px 12px; border-left:1px solid #edf0f3; color:#747d89; }
+  .outline b { color:#404751; }
+  .outline div { padding:5px 0; }
+  .wide-article { padding-left:54px; padding-right:54px; }
+</style>
+
+<h2>用户端文档中心：是否保留右侧页内目录？</h2>
+<p class="subtitle">左侧始终是整棵文档树。区别只在长文档的阅读导航。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="reader">
+        <div class="reader-top"><b>AI Infra 文档中心</b><span>快速开始</span><span>API 参考</span><div class="reader-search">搜索文档标题</div></div>
+        <div class="reader-main">
+          <div class="reader-tree"><div class="group">⌄ 快速开始</div><div class="doc">平台概览</div><div class="doc active">创建推理服务</div><div class="doc">查看服务状态</div><div class="group">› 模型管理</div><div class="group">› API 参考</div></div>
+          <div class="article"><h4>创建推理服务</h4><div class="updated">更新于 2026-06-30</div><p>创建推理服务前，请准备模型制品与运行时配置。</p><div class="callout">提示：首次部署建议使用默认资源配置。</div><h5>创建服务</h5><div class="article-code">POST /v1/inference-services</div><h5>查看部署状态</h5><p>服务创建后，可通过详情页查看实例状态。</p></div>
+          <div class="outline"><b>本页内容</b><div>准备工作</div><div>创建服务</div><div>请求参数</div><div>查看部署状态</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · 三栏阅读（推荐）</h3><p>左侧全局文档树，右侧根据正文标题自动生成页内目录。长技术文档定位更快；窄屏时右栏自动隐藏。</p></div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="reader">
+        <div class="reader-top"><b>AI Infra 文档中心</b><span>快速开始</span><span>API 参考</span><div class="reader-search">搜索文档标题</div></div>
+        <div class="reader-main">
+          <div class="reader-tree"><div class="group">⌄ 快速开始</div><div class="doc">平台概览</div><div class="doc active">创建推理服务</div><div class="doc">查看服务状态</div><div class="group">› 模型管理</div><div class="group">› API 参考</div></div>
+          <div class="article wide-article"><h4>创建推理服务</h4><div class="updated">更新于 2026-06-30</div><p>创建推理服务前，请准备模型制品与运行时配置。</p><div class="callout">提示：首次部署建议使用默认资源配置。</div><h5>创建服务</h5><div class="article-code">POST /v1/inference-services</div><h5>查看部署状态</h5><p>服务创建后，可通过详情页查看实例状态。</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B · 双栏宽正文</h3><p>界面更干净，正文空间更宽；长文只能通过滚动寻找章节，内容增长后导航效率会下降。</p></div>
+  </div>
+</div>
