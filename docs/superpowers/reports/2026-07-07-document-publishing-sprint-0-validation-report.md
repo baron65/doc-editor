@@ -11,7 +11,7 @@
 
 - 后端：Spring Boot 2.3.12.RELEASE、Java 11 目标、MyBatis-Plus 3.5.1、MySQL 8 DDL、`client/application/domain/infra` 分层、`CommonResponse<T>`、管理端/用户端 Controller。
 - 前端：`@umijs/max@4.5.3`、Tailwind 3.4.17、TypeScript 4.9.5、Tiptap 3.27.3 基础编辑器、Tiptap Image、管理端/用户端路由和服务层。
-- 环境：后端 Maven 由 Maven Wrapper 管理，固定 Apache Maven 3.5.4，并使用 `backend/.mvn-user`；前端只固定 pnpm 版本，不在项目内定义包存放路径。
+- 环境：后端 Maven 由 Maven Wrapper 管理，固定 Apache Maven 3.5.4；前端只固定 pnpm 版本，不在项目内定义包存放路径。
 - Docker Compose：仅保留 MySQL 8.0.33 与 MinIO S3 兼容对象存储依赖服务，前后端均按本地命令启动，`docker compose -f docker-compose.dev.yml config` 通过。
 - 接口验证：当前已在本地后端 + Compose MySQL 8.0.33 上跑通过建目录、建文档、保存草稿、发布、用户读取、下架和清理链路。
 - 本地验证：不再提供额外构建包装入口、独立脚本或前后端应用 Dockerfile，统一使用 Docker MySQL/MinIO、Maven Wrapper 和 pnpm。
@@ -31,7 +31,7 @@
 | 前端生产构建 | `cd frontend && pnpm build` | PASS，Umi v4.5.3 Webpack compiled successfully |
 | Docker Compose 配置 | `docker compose -f docker-compose.dev.yml config` | PASS，MySQL/MinIO 服务配置可解析 |
 | 本机依赖启动 | `docker compose -f docker-compose.dev.yml up -d`、`docker compose -f docker-compose.dev.yml ps` | PASS，MySQL healthy，MinIO Up，端口 `13306/19000/19001` 已映射 |
-| Maven Wrapper 版本 | `cd backend && ./mvnw -version` | PASS，输出 Apache Maven 3.5.4，Maven home 位于 `backend/.mvn-user` |
+| Maven Wrapper 版本 | `cd backend && ./mvnw -version` | PASS，输出 Apache Maven 3.5.4 |
 | 后端 MinIO 连通 | `cd backend && ./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=18080` | PASS，Spring Boot 启动成功，S3 adapter 可访问 MinIO 并初始化 bucket |
 | 对象上传/下载链路 | `POST /api/v1/document-center/admin/documents/{documentId}/assets`、`GET /api/v1/document-center/admin/documents/{documentId}/assets/{assetId}` | PASS，测试附件上传返回 assetId，下载接口返回 `HTTP 200` 与正确 `Content-Length` |
 | 空白/冲突检查 | `git diff --check` | PASS |

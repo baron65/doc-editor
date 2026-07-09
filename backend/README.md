@@ -40,7 +40,7 @@ The default datasource points to Compose MySQL on `localhost:13306`, database `d
 
 Runtime environment variables are listed in `../.env.example`.
 
-Use `./mvnw` for local development even if Maven is not installed globally. The wrapper stores downloaded Maven distributions and the local Maven repository under `backend/.mvn-user` by default, so it does not write to the user's home directory inside restricted workspaces.
+Use `./mvnw` for local development even if Maven is not installed globally. The wrapper manages only the Maven distribution version; dependency downloads go to the normal global Maven cache under `~/.m2`.
 
 Useful local checks:
 

@@ -6,7 +6,6 @@
 target/
 *.class
 *.log
-.mvn-user/
 
 # Node / Umi
 node_modules/
