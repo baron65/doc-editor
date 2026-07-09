@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentAssetRefMapper">
+    <delete id="deleteByDocumentIdAndRefScope">
+        DELETE FROM doc_asset_ref
+        WHERE document_id = #{documentId}
+          AND ref_scope = #{refScope}
+    </delete>
+
+    <insert id="insertBatch">
+        INSERT INTO doc_asset_ref (document_id, asset_id, ref_scope, created_at)
+        VALUES
+        <foreach collection="refs" item="ref" separator=",">
+            (#{ref.documentId}, #{ref.assetId}, #{ref.refScope}, #{ref.createdAt})
+        </foreach>
+    </insert>
+
+    <insert id="copyDraftRefsToPublished">
+        INSERT INTO doc_asset_ref (document_id, asset_id, ref_scope, created_at)
+        SELECT document_id, asset_id, 'PUBLISHED', NOW()
+        FROM doc_asset_ref
+        WHERE document_id = #{documentId}
+          AND ref_scope = 'DRAFT'
+    </insert>
+
+    <select id="countByDocumentAssetScope" resultType="int">
+        SELECT COUNT(1)
+        FROM doc_asset_ref
+        WHERE document_id = #{documentId}
+          AND asset_id = #{assetId}
+          AND ref_scope = #{refScope}
+    </select>
+</mapper>

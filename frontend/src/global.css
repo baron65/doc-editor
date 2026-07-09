@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f5f7fb;
+  color: #1f2937;
+}
+
+.document-content {
+  color: #1f2937;
+  line-height: 1.75;
+}
+
+.document-content img,
+.document-content table,
+.document-content pre {
+  max-width: 100%;
+}
+
+.document-editor p,
+.document-content p {
+  margin: 0.75rem 0;
+}
+
+.document-editor h1,
+.document-editor h2,
+.document-editor h3,
+.document-content h1,
+.document-content h2,
+.document-content h3 {
+  margin: 1.25rem 0 0.75rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.document-editor h2,
+.document-content h2 {
+  font-size: 1.25rem;
+}
+
+.document-editor ul,
+.document-editor ol,
+.document-content ul,
+.document-content ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+.document-editor ul,
+.document-content ul {
+  list-style: disc;
+}
+
+.document-editor ol,
+.document-content ol {
+  list-style: decimal;
+}
+
+.document-editor blockquote,
+.document-content blockquote {
+  margin: 1rem 0;
+  border-left: 3px solid #dbeafe;
+  padding-left: 1rem;
+  color: #4b5563;
+}
+
+.document-editor a,
+.document-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.document-editor pre,
+.document-content pre {
+  overflow: auto;
+  border-radius: 0.75rem;
+  background: #111827;
+  padding: 1rem;
+  color: #f9fafb;
+}
+
+.document-editor .mermaid-node pre {
+  background: transparent;
+  padding: 0;
+  color: #4b5563;
+}
+
+.mermaid-renderer svg {
+  max-width: 100%;
+  height: auto;
+}

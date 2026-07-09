@@ -125,7 +125,7 @@ flowchart LR
 
 - 独立参考工程可采用单后端工程 + 单前端工程组织；迁移到企业系统时，后端代码进入当前承载业务需求的既有 Spring Boot 服务，不新增独立微服务。
 - 不为本模块新增 Redis、Kafka、Elasticsearch、WebSocket 或 Node 后端服务。
-- 对象存储统一通过 `DocumentObjectStorage` 适配器隔离；独立工程可使用本地磁盘或 MinIO，迁移到企业系统时替换为 `platform-support-storage-v2`。
+- 对象存储统一通过 `DocumentObjectStorage` 适配器隔离；独立工程默认使用 MinIO S3 兼容对象存储，迁移到企业系统时替换为 `platform-support-storage-v2`。
 - 管理端与用户端在同一 Umi 工程内使用四个独立路由，管理端编辑器依赖不能进入普通用户首屏包。
 - 权限在独立工程中只做登录与后台写接口占位；迁移后继续由现有菜单、后台接口权限和登录体系负责，本模块不建立文档级 ACL。
 
@@ -2305,7 +2305,7 @@ Spike 不通过时优先调整精确依赖版本或 Markdown 适配器；只有 
 | ID | 参考工程 BIGINT/Snowflake 生成器 | 切换企业 ID 生成器，并保持前端字符串序列化策略 |
 | 审计字段 | BIGINT 用户 ID + DATETIME + 用户上下文占位 | 继承实际审计基类、MetaObjectHandler 或用户上下文 |
 | 数据库 | MySQL 8.0 优先，DDL 保持 OceanBase MySQL 模式兼容 | 用企业实际版本验证索引、事务和字符集 |
-| 存储 | `DocumentObjectStorage` 抽象 + 本地磁盘或 MinIO 适配器 | 替换为 `platform-support-storage-v2` adapter 并做故障测试 |
+| 存储 | `DocumentObjectStorage` 抽象 + MinIO S3 adapter | 替换为 `platform-support-storage-v2` adapter 并做故障测试 |
 | 前端 UI | Tailwind + 参考 UI 组件实现交互契约 | 用企业实际设计系统组件替换外观层 |
 | 测试 | 参考工程内 JUnit/前端/E2E 命令 | 确认企业 CI 命令、报告与 E2E 基础设施 |
 | 配置 | 本地配置或 `.env` | 替换为 Nacos/项目配置前缀并补充配置变更流程 |
@@ -2320,7 +2320,7 @@ Spike 不通过时优先调整精确依赖版本或 Markdown 适配器；只有 
 
 1. 在独立后端参考工程输出有效 dependency tree，确认 Mapper 扫描、事务管理器、Jackson 收敛和测试插件。
 2. 在本地 MySQL 8.0 或等价测试库验证五表 DDL、二进制排序规则、唯一索引多 NULL、事务和 `INSERT ... SELECT`，并记录 OceanBase MySQL 模式迁移风险。
-3. 通过 `DocumentObjectStorage` 抽象完成本地磁盘或 MinIO 的流式上传、读取、删除、超时和对象不存在最小验证；企业内网迁移时再替换为 `platform-support-storage-v2`。
+3. 通过 `DocumentObjectStorage` 抽象完成 MinIO S3 adapter 的流式上传、读取、删除、超时和对象不存在最小验证；企业内网迁移时再替换为 `platform-support-storage-v2`。
 4. 在参考工程中落地 `CommonResponse<T>`、HTTP 状态、登录用户占位、权限占位、CSRF 策略、ID 和审计字段，并标注企业平台替换点。
 5. 确定会实际执行后端、前端和 E2E 测试的命令，并验证测试报告数量非零。
 6. 在 Umi Max 4.5.3 / TypeScript 4.9.5 独立前端工程完成 Tiptap、Markdown、Static Renderer、Mermaid 和构建拆包 Spike，锁定精确依赖版本。

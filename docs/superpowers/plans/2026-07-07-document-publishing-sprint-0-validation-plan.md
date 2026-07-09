@@ -4,20 +4,20 @@
 
 **Goal:** 在真实企业仓库暂不可用的前提下，先基于已确认的后端与前端技术栈搭建独立参考工程，完成文档发布中心的开发基线验证，保证后续迁移到企业内网系统时只需要替换认证、统一响应、存储 SDK、菜单权限、包名前缀和配置等适配层。
 
-**Architecture:** 本计划中的“基线验证”取代原先依赖企业业务仓库的接入验证。它不等待企业内网仓库，而是在当前独立工程内验证项目脚手架、依赖闭合、DDL、事务、存储抽象、接口协议、测试门禁，以及 Umi Max 4.5.3、TypeScript 4.9.5、Tailwind 3.4.17、Tiptap/Markdown/Mermaid/Static Renderer 的可构建性和拆包边界。基线通过后，再并行进入后端表与领域服务、前端编辑器、用户端 Reader 三条完整功能开发线。
+**Architecture:** 本计划在当前独立工程内完成基线验证，检查脚手架、依赖闭合、DDL、事务、存储抽象、接口协议与测试门禁；通过后再进入后端、前端和 Reader 的完整功能开发。
 
-**Tech Stack:** Java 11、Spring Boot 2.3.12.RELEASE、Maven、MyBatis-Plus 3.5.1、MySQL/OceanBase MySQL 模式、`DocumentObjectStorage` 抽象（独立工程本地/MinIO，企业迁移替换为 `platform-support-storage-v2`）、参考 `CommonResponse<T>`（企业迁移替换为 `platform-support-web-v2` 相关实现）、@umijs/max 4.5.3、Tailwind 3.4.17、TypeScript 4.9.5、Tiptap 3.x、Mermaid。
+**Tech Stack:** Java 11、Spring Boot 2.3.12.RELEASE、Maven、MyBatis-Plus 3.5.1、MySQL/OceanBase MySQL 模式、`DocumentObjectStorage` 抽象（MinIO S3 adapter，企业迁移替换为 `platform-support-storage-v2`）、参考 `CommonResponse<T>`（企业迁移替换为 `platform-support-web-v2`）、@umijs/max 4.5.3、Tailwind 3.4.17、TypeScript 4.9.5、Tiptap 3.x、Mermaid。
 
 ## Global Constraints
 
 - 当前默认无法访问真实企业仓库；不得再把“企业仓库接入验证通过”作为启动开发的前置条件。
 - 当前项目目标是独立可运行参考实现，不是一次性 Demo；所有包结构、API 路径、响应体、存储接口、审计字段和前端路由都必须服务于后续迁移。
 - 不重新打开已确认产品范围：不做多人协作、评论、分享、导出、审批、定时发布、历史版本、回滚、全文检索、文档级权限和外部内容嵌入。
-- 后端先按 `com.xxx.pai.mlp.man.documentcenter` 搭建参考包名，并按 `client/application/domain/infra` 分包；迁移时若真实仓库历史上实际使用 `clinet` 目录名，则沿用现状，不新建并行目录。Controller、Service、DTO、VO、PO、Mapper 遵循 `{Domain}Controller`、`{Domain}Service`/`{Domain}ServiceImpl`、`{Domain}DTO`、`{Domain}VO`、`{Domain}PO`、`{Domain}Mapper` 命名。
+- 后端按 `com.xxx.pai.mlp.man.documentcenter` 搭建参考包名，并按 `client/application/domain/infra` 分包；若真实仓库历史上实际使用 `clinet` 目录名，则沿用现状。Controller、Service、DTO、VO、PO、Mapper 遵循 `{Domain}Controller`、`{Domain}Service`/`{Domain}ServiceImpl`、`{Domain}DTO`、`{Domain}VO`、`{Domain}PO`、`{Domain}Mapper` 命名。
 - 后端管理端接口逻辑前缀为 `/api/v1/document-center/admin`，用户端接口逻辑前缀为 `/api/v1/document-center`；前端页面路由可以继续使用系统现有后台菜单路径。
 - 正文持久化格式为受控 Tiptap/ProseMirror JSON，API 传输 `schemaVersion` 与 `content` 两个同级字段；不保存 HTML、DOM、永久文件 URL 或任意 CSS class。
 - 发布事务只能访问数据库，不能调用对象存储、Mermaid、HTTP 或消息队列。
-- 图片和附件通过后端代理的单文件流式上传接入 `DocumentObjectStorage` 抽象；独立工程可先使用本地磁盘或 MinIO 适配器，迁移到企业内网后再替换为 `platform-support-storage-v2`。
+- 图片和附件通过后端代理单文件上传接入 `DocumentObjectStorage`；默认使用 MinIO S3 adapter，企业迁移后替换为 `platform-support-storage-v2`。
 - Mermaid 完整语法只由官方管理端在预览和发布前校验；Java 后端校验节点结构、源码大小、资源归属和安全属性。
 - 所有 BIGINT ID、`draftRevision`、`publishedRevision`、`publicationVersion`、`treeRevision` 在 JSON 中序列化为字符串。
 - 基线验证输出是证据报告、迁移清单与 Spike 结论；基线通过后才进入完整功能开发。
@@ -168,7 +168,7 @@ Expected:
 - 能看到 Spring Boot 2.3.12.RELEASE 相关依赖闭合。
 - Jackson `core`、`databind`、`annotations`、JSR-310 module 版本不混装。
 - 没有同时把 `javax.servlet.*` 与 `jakarta.servlet.*` 两套 Servlet API 都直接打入目标 Web 运行包。
-- 没有为文档模块新增 AWS S3 SDK、JPA、Redis、Kafka、Elasticsearch 主链路依赖。
+- 除本机 MinIO 验证所需的 AWS SDK v2 S3 adapter 外，没有为文档模块新增 JPA、Redis、Kafka、Elasticsearch 主链路依赖。
 
 - [ ] **Step 2: 确认 MyBatis 与事务边界**
 
@@ -195,7 +195,7 @@ find . -path '*surefire-reports*' -type f
 
 Expected:
 
-- `mvn test` 不应因为父 POM `skipTests=true` 静默跳过。
+- `mvn test` 不应被父 POM 的 `skipTests=true` 静默跳过。
 - 若 `mvn test` 被跳过，报告必须记录实际可用命令，例如 `mvn -DskipTests=false test`、模块级命令或 CI 命令。
 - `surefire-reports` 或等价测试报告数量大于 0。
 
@@ -330,12 +330,12 @@ git commit -m "docs: record database baseline validation"
 **Files:**
 
 - Modify: `docs/superpowers/reports/2026-07-07-document-publishing-sprint-0-validation-report.md`
-- Create: 后端测试代码中的 `DocumentObjectStorage` 与本地/MinIO 适配器 Spike，按参考工程规范命名
+- Create: 后端测试代码中的 `DocumentObjectStorage` 适配器 Spike，按参考工程规范命名
 - Test: 后端存储适配器测试，按参考工程规范命名
 
 **Interfaces:**
 
-- Consumes: 独立工程的本地磁盘或 MinIO 适配器；迁移时替换为 `platform-support-storage-v2`。
+- Consumes: 独立工程的 MinIO S3 adapter；迁移时替换为 `platform-support-storage-v2`。
 - Produces: `DocumentAssetService` 是否可以采用后端代理流式上传的结论，以及企业内网存储 SDK 的替换清单。
 
 - [ ] **Step 1: 定义存储抽象与迁移替换点**
@@ -349,7 +349,7 @@ rg -n 'DocumentObjectStorage|Storage|Object|upload|download|delete|presign|tempo
 Expected:
 
 - 找到或创建 `DocumentObjectStorage` 抽象。
-- 明确独立工程使用的本地磁盘或 MinIO 适配器是否支持：上传流、读取流或短期 URL、删除、对象不存在处理、元数据读取。
+- 明确独立工程使用的 MinIO S3 adapter 是否支持：上传流、读取流、删除、对象不存在处理、元数据读取。
 - 报告中记录迁移到 `platform-support-storage-v2` 时必须替换的 adapter 类、配置项和异常映射。
 
 - [ ] **Step 2: 写最小 Spike**

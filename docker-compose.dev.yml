@@ -1,0 +1,40 @@
+services:
+  mysql:
+    image: mysql:8.0.33
+    container_name: document-center-mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_bin
+      - --default-time-zone=+08:00
+    environment:
+      MYSQL_DATABASE: document_center
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Shanghai
+    ports:
+      - "13306:3306"
+    volumes:
+      - document-center-mysql-data:/var/lib/mysql
+      - ./backend/src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: document-center-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: document-center
+      MINIO_ROOT_PASSWORD: document-center-secret
+      TZ: Asia/Shanghai
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    volumes:
+      - document-center-minio-data:/data
+
+volumes:
+  document-center-mysql-data:
+  document-center-minio-data:

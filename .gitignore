@@ -1,0 +1,25 @@
+.DS_Store
+.env
+.env.local
+
+# Java / Maven
+target/
+*.class
+*.log
+.mvn-user/
+
+# Node / Umi
+node_modules/
+.pnpm-store/
+dist/
+.umi/
+.umi-production/
+.cache/
+
+# Local runtime data
+data/
+uploads/
+
+# IDE
+.idea/
+.vscode/

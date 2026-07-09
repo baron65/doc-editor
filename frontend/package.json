@@ -1,0 +1,41 @@
+{
+  "name": "document-center-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Document publishing center reference frontend",
+  "scripts": {
+    "postinstall": "max setup",
+    "start": "max dev",
+    "dev": "max dev",
+    "build": "max build",
+    "setup": "max setup",
+    "lint": "max lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.27.3",
+    "@tiptap/extension-image": "3.27.3",
+    "@tiptap/extension-link": "3.27.3",
+    "@tiptap/extension-underline": "3.27.3",
+    "@tiptap/pm": "3.27.3",
+    "@tiptap/react": "3.27.3",
+    "@tiptap/starter-kit": "3.27.3",
+    "@umijs/max": "4.5.3",
+    "mermaid": "10.7.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "18.19.39",
+    "@types/react": "18.2.66",
+    "@types/react-dom": "18.2.22",
+    "autoprefixer": "10.4.20",
+    "postcss": "8.4.49",
+    "tailwindcss": "3.4.17",
+    "typescript": "4.9.5"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "packageManager": "pnpm@11.7.0"
+}
