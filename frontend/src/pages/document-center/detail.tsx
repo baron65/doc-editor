@@ -1,15 +1,22 @@
 import { history, useParams, useRequest } from '@umijs/max';
 import { DocumentReader } from '@/document-center/reader/DocumentReader';
 import { DocumentTreePanel } from '@/document-center/tree/DocumentTreePanel';
-import { getPublishedDocument, getPublishedTree } from '@/services/documentCenter';
+import {
+  getPublishedDocument,
+  getPublishedTree,
+  passthroughRequestResult,
+} from '@/services/documentCenter';
 import type { DocumentTree, PublishedDocumentDetail } from '@/types/documentCenter';
 
 export default function DocumentDetailPage() {
   const params = useParams();
   const documentId = params.documentId ?? '';
 
-  const treeRequest = useRequest(getPublishedTree);
+  const treeRequest = useRequest(getPublishedTree, {
+    formatResult: passthroughRequestResult,
+  });
   const detailRequest = useRequest(() => getPublishedDocument(documentId), {
+    formatResult: passthroughRequestResult,
     refreshDeps: [documentId],
   });
   const tree = treeRequest.data as DocumentTree | undefined;

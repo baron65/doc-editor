@@ -1,10 +1,12 @@
 import { history, useRequest } from '@umijs/max';
 import { DocumentTreePanel } from '@/document-center/tree/DocumentTreePanel';
-import { getPublishedTree } from '@/services/documentCenter';
+import { getPublishedTree, passthroughRequestResult } from '@/services/documentCenter';
 import type { DocumentTree } from '@/types/documentCenter';
 
 export default function DocumentCenterPage() {
-  const { data: tree, loading } = useRequest(getPublishedTree);
+  const { data: tree, loading } = useRequest(getPublishedTree, {
+    formatResult: passthroughRequestResult,
+  });
   const typedTree = tree as DocumentTree | undefined;
 
   return (

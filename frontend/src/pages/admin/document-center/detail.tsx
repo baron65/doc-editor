@@ -1,15 +1,22 @@
 import { history, useParams, useRequest } from '@umijs/max';
 import { DocumentEditorShell } from '@/document-center/editor/DocumentEditorShell';
 import { DocumentTreePanel } from '@/document-center/tree/DocumentTreePanel';
-import { getAdminDocument, getAdminTree } from '@/services/documentCenter';
+import {
+  getAdminDocument,
+  getAdminTree,
+  passthroughRequestResult,
+} from '@/services/documentCenter';
 import type { AdminDocumentDetail, DocumentTree } from '@/types/documentCenter';
 
 export default function AdminDocumentDetailPage() {
   const params = useParams();
   const documentId = params.documentId ?? '';
 
-  const treeRequest = useRequest(getAdminTree);
+  const treeRequest = useRequest(getAdminTree, {
+    formatResult: passthroughRequestResult,
+  });
   const detailRequest = useRequest(() => getAdminDocument(documentId), {
+    formatResult: passthroughRequestResult,
     refreshDeps: [documentId],
   });
   const tree = treeRequest.data as DocumentTree | undefined;

@@ -16,6 +16,10 @@ function unwrap<T>(response: CommonResponse<T>): T {
   return response.data;
 }
 
+export function passthroughRequestResult<T>(result: T): T {
+  return result;
+}
+
 export async function getPublishedTree() {
   return unwrap(await request<CommonResponse<DocumentTree>>('/api/v1/document-center/tree'));
 }
@@ -53,9 +57,9 @@ export async function createDocument(parentId: string, title: string, expectedTr
     await request<CommonResponse<DocumentOperation>>('/api/v1/document-center/admin/documents', {
       method: 'POST',
       data: {
-        parentId,
+        parentId: Number(parentId),
         title,
-        expectedTreeRevision,
+        expectedTreeRevision: expectedTreeRevision ? Number(expectedTreeRevision) : undefined,
       },
     }),
   );
@@ -66,9 +70,9 @@ export async function createDirectory(parentId: string, name: string, expectedTr
     await request<CommonResponse<DocumentOperation>>('/api/v1/document-center/admin/directories', {
       method: 'POST',
       data: {
-        parentId,
+        parentId: Number(parentId),
         name,
-        expectedTreeRevision,
+        expectedTreeRevision: expectedTreeRevision ? Number(expectedTreeRevision) : undefined,
       },
     }),
   );

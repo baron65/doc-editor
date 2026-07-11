@@ -7,14 +7,28 @@ import {
   deleteNode,
   getAdminTree,
   moveNode,
+  passthroughRequestResult,
   renameDirectory,
 } from '@/services/documentCenter';
 import type { DocumentTree, DocumentTreeNode } from '@/types/documentCenter';
 
+type CreateKind = 'DOCUMENT' | 'DIRECTORY';
+
+interface FeedbackState {
+  type: 'success' | 'error';
+  message: string;
+}
+
 export default function AdminDocumentCenterPage() {
-  const { data: tree, loading, refresh } = useRequest(getAdminTree);
+  const { data: tree, loading, refresh, error: treeError } = useRequest(getAdminTree, {
+    formatResult: passthroughRequestResult,
+  });
   const typedTree = tree as DocumentTree | undefined;
   const [selectedNode, setSelectedNode] = useState<DocumentTreeNode>();
+  const [createKind, setCreateKind] = useState<CreateKind>();
+  const [createName, setCreateName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState>();
   const flatNodes = useMemo(() => flattenNodes(typedTree?.nodes ?? []), [typedTree?.nodes]);
   const selectedSiblingInfo = useMemo(
     () => getSiblingInfo(flatNodes, selectedNode),
@@ -28,17 +42,54 @@ export default function AdminDocumentCenterPage() {
     return '0';
   };
 
-  const handleCreateDocument = async () => {
-    const operation = await createDocument(getCreateParentId(), '新文档', typedTree?.treeRevision);
-    await refresh();
-    if (operation.id) {
-      history.push(`/admin/document-center/${operation.id}`);
-    }
+  const openCreatePanel = (kind: CreateKind) => {
+    setCreateKind(kind);
+    setCreateName(kind === 'DOCUMENT' ? '新文档' : '新目录');
+    setFeedback(undefined);
   };
 
-  const handleCreateDirectory = async () => {
-    await createDirectory(getCreateParentId(), '新目录', typedTree?.treeRevision);
-    await refresh();
+  const handleCreateSubmit = async () => {
+    if (!createKind || creating) {
+      return;
+    }
+    const name = createName.trim();
+    if (!name) {
+      setFeedback({ type: 'error', message: createKind === 'DOCUMENT' ? '请输入文档标题。' : '请输入目录名称。' });
+      return;
+    }
+    if (!typedTree?.treeRevision) {
+      setFeedback({
+        type: 'error',
+        message: '文档树尚未加载成功，暂时无法创建。请确认后端服务已启动后刷新重试。',
+      });
+      return;
+    }
+
+    setCreating(true);
+    setFeedback(undefined);
+    try {
+      const operation =
+        createKind === 'DOCUMENT'
+          ? await createDocument(getCreateParentId(), name, typedTree.treeRevision)
+          : await createDirectory(getCreateParentId(), name, typedTree.treeRevision);
+      await refresh();
+      setCreateKind(undefined);
+      setCreateName('');
+      setFeedback({
+        type: 'success',
+        message: createKind === 'DOCUMENT' ? '文档已创建。' : '目录已创建。',
+      });
+      if (createKind === 'DOCUMENT' && operation.id) {
+        history.push(`/admin/document-center/${operation.id}`);
+      }
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        message: getErrorMessage(error, createKind === 'DOCUMENT' ? '新建文档失败。' : '新建目录失败。'),
+      });
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleRenameDirectory = async () => {
@@ -49,11 +100,17 @@ export default function AdminDocumentCenterPage() {
     if (!nextName?.trim()) {
       return;
     }
-    await renameDirectory(selectedNode.id, {
-      name: nextName.trim(),
-      expectedTreeRevision: typedTree.treeRevision,
-    });
-    await refresh();
+    setFeedback(undefined);
+    try {
+      await renameDirectory(selectedNode.id, {
+        name: nextName.trim(),
+        expectedTreeRevision: typedTree.treeRevision,
+      });
+      await refresh();
+      setFeedback({ type: 'success', message: '目录已重命名。' });
+    } catch (error) {
+      setFeedback({ type: 'error', message: getErrorMessage(error, '重命名目录失败。') });
+    }
   };
 
   const handleDeleteNode = async () => {
@@ -68,9 +125,15 @@ export default function AdminDocumentCenterPage() {
     if (!confirmed) {
       return;
     }
-    await deleteNode(selectedNode.id, typedTree.treeRevision);
-    setSelectedNode(undefined);
-    await refresh();
+    setFeedback(undefined);
+    try {
+      await deleteNode(selectedNode.id, typedTree.treeRevision);
+      setSelectedNode(undefined);
+      await refresh();
+      setFeedback({ type: 'success', message: '节点已删除。' });
+    } catch (error) {
+      setFeedback({ type: 'error', message: getErrorMessage(error, '删除节点失败。') });
+    }
   };
 
   const handleMoveSelected = async (direction: 'UP' | 'DOWN') => {
@@ -81,12 +144,18 @@ export default function AdminDocumentCenterPage() {
     if (nextIndex < 0 || nextIndex >= selectedSiblingInfo.siblings.length) {
       return;
     }
-    await moveNode(selectedNode.id, {
-      targetParentId: selectedNode.parentId,
-      targetIndex: nextIndex,
-      expectedTreeRevision: typedTree.treeRevision,
-    });
-    await refresh();
+    setFeedback(undefined);
+    try {
+      await moveNode(selectedNode.id, {
+        targetParentId: selectedNode.parentId,
+        targetIndex: nextIndex,
+        expectedTreeRevision: typedTree.treeRevision,
+      });
+      await refresh();
+      setFeedback({ type: 'success', message: '节点顺序已更新。' });
+    } catch (error) {
+      setFeedback({ type: 'error', message: getErrorMessage(error, '移动节点失败。') });
+    }
   };
 
   return (
@@ -101,18 +170,90 @@ export default function AdminDocumentCenterPage() {
             <button
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm text-white"
               type="button"
-              onClick={handleCreateDocument}
+              onClick={() => openCreatePanel('DOCUMENT')}
             >
               新建文档
             </button>
             <button
               className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700"
               type="button"
-              onClick={handleCreateDirectory}
+              onClick={() => openCreatePanel('DIRECTORY')}
             >
               新建目录
             </button>
           </div>
+          {createKind && (
+            <div className="mt-3 rounded-lg border border-brand-100 bg-brand-50/70 p-3">
+              <div className="mb-2 text-xs font-medium text-brand-700">
+                {createKind === 'DOCUMENT' ? '新建文档' : '新建目录'}
+                <span className="ml-1 font-normal text-gray-500">
+                  / 父级：{selectedNode?.nodeType === 'DIRECTORY' ? selectedNode.title : '根目录'}
+                </span>
+              </div>
+              <input
+                autoFocus
+                className="w-full rounded-md border border-brand-100 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none focus:border-brand-500"
+                disabled={creating}
+                value={createName}
+                onChange={(event) => setCreateName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    void handleCreateSubmit();
+                  }
+                  if (event.key === 'Escape') {
+                    setCreateKind(undefined);
+                    setCreateName('');
+                  }
+                }}
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                  type="button"
+                  disabled={creating}
+                  onClick={() => void handleCreateSubmit()}
+                >
+                  {creating ? '创建中...' : '确认创建'}
+                </button>
+                <button
+                  className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 disabled:opacity-50"
+                  type="button"
+                  disabled={creating}
+                  onClick={() => {
+                    setCreateKind(undefined);
+                    setCreateName('');
+                  }}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
+          {treeError && (
+            <div className="mt-3 rounded-lg border border-red-100 bg-red-50 p-3 text-xs text-red-700">
+              <div className="font-medium">文档树加载失败</div>
+              <div className="mt-1 break-words">{getErrorMessage(treeError, '请确认后端服务已启动后重试。')}</div>
+              <button
+                className="mt-2 rounded-md border border-red-200 bg-white px-2 py-1 text-red-700"
+                type="button"
+                onClick={() => void refresh()}
+              >
+                重新加载
+              </button>
+            </div>
+          )}
+          {feedback && (
+            <div
+              className={[
+                'mt-3 rounded-lg border p-3 text-xs',
+                feedback.type === 'success'
+                  ? 'border-green-100 bg-green-50 text-green-700'
+                  : 'border-red-100 bg-red-50 text-red-700',
+              ].join(' ')}
+            >
+              {feedback.message}
+            </div>
+          )}
           <div className="mt-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
             <div className="mb-2 truncate">
               当前选中：{selectedNode ? `${selectedNode.nodeType === 'DIRECTORY' ? '目录' : '文档'} / ${selectedNode.title}` : '根目录'}
@@ -196,4 +337,14 @@ function getSiblingInfo(nodes: DocumentTreeNode[], selectedNode?: DocumentTreeNo
     siblings,
     index: siblings.findIndex((node) => node.id === selectedNode.id),
   };
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+  return fallback;
 }
