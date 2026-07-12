@@ -64,6 +64,7 @@ public class DocumentAssetController {
         return ResponseEntity.ok()
                 .cacheControl(cacheControl)
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
                 .contentType(MediaType.parseMediaType(download.getMimeType()))
                 .contentLength(download.getSizeBytes())
                 .body(new InputStreamResource(download.getInputStream()));

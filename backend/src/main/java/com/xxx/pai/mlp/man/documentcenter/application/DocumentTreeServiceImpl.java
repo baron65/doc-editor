@@ -625,15 +625,19 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
 
     private void assertTreeRevision(Long expectedTreeRevision, Long currentTreeRevision) {
         if (expectedTreeRevision != null && !expectedTreeRevision.equals(currentTreeRevision)) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "tree revision conflict");
+            throw new DocumentBusinessException(DocumentErrorCode.TREE_VERSION_CONFLICT, "tree revision conflict");
         }
     }
 
     private long bumpTreeRevision(DocumentTreeMetaPO treeMeta) {
         long newRevision = treeMeta.getTreeRevision() + 1;
-        treeMeta.setTreeRevision(newRevision);
-        treeMeta.setUpdatedAt(LocalDateTime.now());
-        documentTreeMetaMapper.updateById(treeMeta);
+        int updatedRows = documentTreeMetaMapper.incrementRevisionIfMatches(
+                treeMeta.getMetaId(),
+                treeMeta.getTreeRevision(),
+                LocalDateTime.now());
+        if (updatedRows != 1) {
+            throw new DocumentBusinessException(DocumentErrorCode.TREE_VERSION_CONFLICT, "tree revision conflict");
+        }
         return newRevision;
     }
 

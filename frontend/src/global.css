@@ -87,6 +87,40 @@ body {
   color: #f9fafb;
 }
 
+.document-editor table {
+  width: 100%;
+  margin: 1rem 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.document-editor th,
+.document-editor td {
+  min-width: 5rem;
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+
+.document-editor th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.document-editor .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgb(219 234 254 / 45%);
+  content: '';
+  pointer-events: none;
+}
+
+.document-editor td,
+.document-editor th {
+  position: relative;
+}
+
 .document-editor .mermaid-node pre {
   background: transparent;
   padding: 0;

@@ -1,6 +1,7 @@
 package com.xxx.pai.mlp.man.documentcenter.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,8 @@ import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentNodeMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentTreeMetaMapper;
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentIdGenerator;
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentJsonUtils;
+import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentBusinessException;
+import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentErrorCode;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +59,7 @@ class DocumentTreeServiceImplTest {
         when(documentNodeMapper.selectList(any())).thenReturn(Collections.emptyList());
         when(documentNodeMapper.insert(any(DocumentNodePO.class))).thenReturn(1);
         when(documentMapper.insert(any(DocumentPO.class))).thenReturn(1);
-        when(documentTreeMetaMapper.updateById(any(DocumentTreeMetaPO.class))).thenReturn(1);
+        when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(1);
         when(documentIdGenerator.nextId()).thenReturn(documentId);
 
         DocumentTreeServiceImpl service = new DocumentTreeServiceImpl(
@@ -77,6 +80,39 @@ class DocumentTreeServiceImplTest {
         assertThat(result.getId()).isEqualTo(String.valueOf(documentId));
         assertThat(result.getDraftRevision()).isEqualTo("1");
         assertThat(result.getTreeRevision()).isEqualTo("4");
+    }
+
+    @Test
+    void createDocumentRollsBackWhenTreeRevisionChangedDuringWrite() {
+        Long parentId = 400L;
+        Long documentId = 900L;
+        when(documentTreeMetaMapper.selectById(1)).thenReturn(treeMeta(3L));
+        when(documentNodeMapper.selectById(parentId)).thenReturn(directory(parentId, 0L, "目录"));
+        when(documentNodeMapper.selectCount(any())).thenReturn(0L);
+        when(documentNodeMapper.selectList(any())).thenReturn(Collections.emptyList());
+        when(documentNodeMapper.insert(any(DocumentNodePO.class))).thenReturn(1);
+        when(documentMapper.insert(any(DocumentPO.class))).thenReturn(1);
+        when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(0);
+        when(documentIdGenerator.nextId()).thenReturn(documentId);
+
+        DocumentTreeServiceImpl service = new DocumentTreeServiceImpl(
+                documentNodeMapper,
+                documentMapper,
+                documentTreeMetaMapper,
+                new DocumentTreeAbility(),
+                new DocumentNameAbility(),
+                new DocumentJsonUtils(new ObjectMapper()),
+                documentIdGenerator);
+        DocumentDTO dto = new DocumentDTO();
+        dto.setParentId(parentId);
+        dto.setTitle("并发文档");
+        dto.setExpectedTreeRevision(3L);
+
+        assertThatThrownBy(() -> service.createDocument(dto))
+                .isInstanceOf(DocumentBusinessException.class)
+                .isInstanceOfSatisfying(DocumentBusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(DocumentErrorCode.TREE_VERSION_CONFLICT))
+                .hasMessageContaining("tree revision conflict");
     }
 
     private static DocumentNodePO directory(Long id, Long parentId, String name) {

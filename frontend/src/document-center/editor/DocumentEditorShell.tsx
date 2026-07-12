@@ -1,11 +1,8 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
-import Link from '@tiptap/extension-link';
-import Image from '@tiptap/extension-image';
-import Underline from '@tiptap/extension-underline';
 import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { MermaidExtension } from '@/document-center/mermaid/MermaidExtension';
 import { DOCUMENT_SCHEMA_VERSION, emptyDocumentContent } from '@/document-center/schema/documentSchema';
+import { DocumentReader } from '@/document-center/reader/DocumentReader';
+import { validateMermaidSyntax } from '@/document-center/content/contentValidation';
 import {
   publishDocument,
   saveDraft,
@@ -13,13 +10,27 @@ import {
   uploadDocumentAsset,
 } from '@/services/documentCenter';
 import type { AdminDocumentDetail, DocumentContent } from '@/types/documentCenter';
+import { DraftSaveCoordinator } from './DraftSaveCoordinator';
+import { createDocumentExtensions } from './documentExtensions';
 
 interface DocumentEditorShellProps {
   document?: AdminDocumentDetail;
 }
 
+interface DraftSnapshot {
+  title: string;
+  content: DocumentContent;
+}
+
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'failed' | 'conflict';
+
 export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const draftRevisionRef = useRef('0');
+  const dirtyRef = useRef(false);
+  const hydratingRef = useRef(false);
+  const conflictRef = useRef(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState<DocumentContent>(emptyDocumentContent);
   const [draftRevision, setDraftRevision] = useState('0');
@@ -27,33 +38,57 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
   const [publicationVersion, setPublicationVersion] = useState<string>();
   const [published, setPublished] = useState(false);
   const [status, setStatus] = useState('当前为 Tiptap 编辑器基线，可继续扩展图片、附件和 Mermaid 节点。');
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
-  const extensions = useMemo(
-    () => [
-      StarterKit,
-      Underline,
-      Link.configure({
-        autolink: true,
-        openOnClick: false,
-      }),
-      Image.extend({
-        addAttributes() {
-          return {
-            ...this.parent?.(),
-            assetId: {
-              default: null,
-            },
-            caption: {
-              default: null,
-            },
-          };
-        },
-      }),
-      MermaidExtension,
-    ],
-    [],
+  const markDirty = () => {
+    dirtyRef.current = true;
+    setDirty(true);
+    if (!conflictRef.current) {
+      setSaveState('dirty');
+    }
+  };
+
+  const saveCoordinator = useMemo(
+    () => new DraftSaveCoordinator<DraftSnapshot>(async (snapshot) => {
+      if (!document) {
+        return;
+      }
+      setSaveState('saving');
+      try {
+        const operation = await saveDraft(document.documentId, {
+          title: snapshot.title,
+          schemaVersion: DOCUMENT_SCHEMA_VERSION,
+          content: snapshot.content,
+          expectedDraftRevision: draftRevisionRef.current,
+        });
+        if (operation.draftRevision) {
+          draftRevisionRef.current = operation.draftRevision;
+          setDraftRevision(operation.draftRevision);
+        }
+        if (operation.publishedRevision) {
+          setPublishedRevision(operation.publishedRevision);
+        }
+        if (operation.publicationVersion) {
+          setPublicationVersion(operation.publicationVersion);
+        }
+        setSaveState('saved');
+        setStatus('草稿已自动保存。');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '草稿保存失败。';
+        const isConflict = message.toLocaleLowerCase().includes('conflict');
+        conflictRef.current = isConflict;
+        setSaveState(isConflict ? 'conflict' : 'failed');
+        setStatus(isConflict ? '检测到编辑冲突，已停止自动保存。请复制当前内容并刷新后合并。' : message);
+        throw error;
+      }
+    }),
+    [document?.documentId],
   );
+
+  const extensions = useMemo(createDocumentExtensions, []);
 
   const editor = useEditor({
     extensions,
@@ -66,6 +101,9 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
     },
     onUpdate: ({ editor: currentEditor }) => {
       setContent(currentEditor.getJSON() as DocumentContent);
+      if (!hydratingRef.current) {
+        markDirty();
+      }
     },
   });
 
@@ -74,15 +112,46 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
       return;
     }
     const nextContent = document.content ?? emptyDocumentContent;
+    hydratingRef.current = true;
+    conflictRef.current = false;
+    dirtyRef.current = false;
     setTitle(document.title);
     setContent(nextContent);
     setDraftRevision(document.draftRevision);
+    draftRevisionRef.current = document.draftRevision;
     setPublishedRevision(document.publishedRevision);
     setPublicationVersion(document.publicationVersion);
     setPublished(document.published);
+    setDirty(false);
+    setSaveState('saved');
     setStatus(document.published ? '线上稿已发布，可继续编辑草稿。' : '当前为草稿态。');
     editor?.commands.setContent(nextContent);
+    hydratingRef.current = false;
   }, [document, editor]);
+
+  useEffect(() => {
+    if (!dirty || conflictRef.current || !document) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      dirtyRef.current = false;
+      setDirty(false);
+      saveCoordinator.enqueue({ title, content });
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [content, dirty, document, saveCoordinator, title]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current && !saveCoordinator.hasPendingWork()) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [saveCoordinator]);
 
   if (!document) {
     return (
@@ -95,24 +164,43 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
   const handleSaveDraft = async () => {
     setBusy(true);
     try {
-      const operation = await saveDraft(document.documentId, {
-        title,
-        schemaVersion: DOCUMENT_SCHEMA_VERSION,
-        content,
-        expectedDraftRevision: draftRevision,
-      });
-      if (operation.draftRevision) {
-        setDraftRevision(operation.draftRevision);
-      }
-      if (operation.publishedRevision) {
-        setPublishedRevision(operation.publishedRevision);
-      }
-      if (operation.publicationVersion) {
-        setPublicationVersion(operation.publicationVersion);
-      }
-      setStatus(`草稿已保存，draftRevision 已更新为 ${operation.draftRevision ?? draftRevision}。`);
+      dirtyRef.current = false;
+      setDirty(false);
+      saveCoordinator.enqueue({ title, content });
+      await saveCoordinator.flush();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '草稿保存失败。');
+      // Coordinator 已保留失败快照和可见错误状态。
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const validateAndFlushDraft = async () => {
+    const validation = await validateMermaidSyntax(content);
+    if (!validation.valid) {
+      setStatus(
+        `第 ${(validation.blockIndex ?? 0) + 1} 个 Mermaid 块语法错误：${validation.message ?? '请检查源码。'}`,
+      );
+      return false;
+    }
+    if (dirtyRef.current) {
+      dirtyRef.current = false;
+      setDirty(false);
+      saveCoordinator.enqueue({ title, content });
+    }
+    await saveCoordinator.flush();
+    return true;
+  };
+
+  const handlePreview = async () => {
+    setBusy(true);
+    try {
+      if (await validateAndFlushDraft()) {
+        setPreviewOpen(true);
+        setStatus('草稿已保存，正在使用用户端 Reader 预览。');
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '打开预览失败。');
     } finally {
       setBusy(false);
     }
@@ -121,8 +209,11 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
   const handlePublish = async () => {
     setBusy(true);
     try {
+      if (!(await validateAndFlushDraft())) {
+        return;
+      }
       const operation = await publishDocument(document.documentId, {
-        expectedDraftRevision: draftRevision,
+        expectedDraftRevision: draftRevisionRef.current,
         expectedPublicationVersion: publicationVersion,
       });
       if (operation.draftRevision) {
@@ -209,6 +300,29 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
     }
   };
 
+  const handleAttachmentSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !editor) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const asset = await uploadDocumentAsset(document.documentId, 'ATTACHMENT', file);
+      editor.chain().focus().setAttachment({
+        assetId: asset.assetId,
+        originalName: asset.originalName,
+        mimeType: asset.mimeType,
+        sizeBytes: asset.sizeBytes,
+      }).run();
+      setStatus('附件已上传并插入编辑器，自动保存后会建立 DRAFT 引用。');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '附件上传失败。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const insertMermaid = () => {
     if (!editor) {
       return;
@@ -228,13 +342,24 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
     setStatus('Mermaid 流程图已插入。发布前请在预览/用户端确认渲染结果。');
   };
 
+  const insertCodeBlock = () => {
+    if (!editor) {
+      return;
+    }
+    const language = window.prompt('请输入代码语言（例如 java、json、bash）', 'java');
+    if (language === null) {
+      return;
+    }
+    editor.chain().focus().setCodeBlock({ language: language.trim() || 'plaintext' }).run();
+  };
+
   return (
     <div className="flex min-h-[520px] flex-col rounded-xl bg-white shadow-sm">
       <div className="border-b border-gray-100 px-6 py-5">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-gray-400">Admin Draft Workspace</p>
-            <p className="mt-1 text-sm text-gray-500">Tiptap JSON 编辑基线，后续扩展图片、附件、Mermaid。</p>
+            <p className="mt-1 text-sm text-gray-500">结构化富文本草稿，自动保存与线上发布相互隔离。</p>
           </div>
           <div className="flex items-center gap-3">
             <span
@@ -243,15 +368,23 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
                 published ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700',
               ].join(' ')}
             >
-              {published ? '已发布' : '草稿'}
+              {published ? (publishedRevision === draftRevision ? '已发布' : '已发布 · 有待发布更新') : '草稿'}
             </span>
+            <button
+              className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
+              type="button"
+              disabled={busy}
+              onClick={handlePreview}
+            >
+              用户视角预览
+            </button>
             <button
               className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
               type="button"
               disabled={busy}
               onClick={handleSaveDraft}
             >
-              保存草稿
+              立即保存
             </button>
             <button
               className="rounded-md bg-brand-500 px-3 py-2 text-sm text-white disabled:opacity-50"
@@ -259,7 +392,7 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
               disabled={busy}
               onClick={handlePublish}
             >
-              发布
+              {published ? '发布更新' : '发布'}
             </button>
             <button
               className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
@@ -275,7 +408,10 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
           className="w-full border-none text-2xl font-semibold text-gray-950 outline-none"
           placeholder="未命名文档"
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => {
+            setTitle(event.target.value);
+            markDirty();
+          }}
         />
       </div>
       <div className="flex-1 space-y-4 p-6">
@@ -301,11 +437,26 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
           <ToolbarButton active={editor?.isActive('blockquote')} disabled={busy} onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
             引用
           </ToolbarButton>
+          <ToolbarButton active={editor?.isActive('codeBlock')} disabled={busy} onClick={insertCodeBlock}>
+            代码块
+          </ToolbarButton>
+          <ToolbarButton disabled={busy} onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
+            分割线
+          </ToolbarButton>
+          <ToolbarButton disabled={busy} onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+            表格
+          </ToolbarButton>
+          <ToolbarButton disabled={busy} onClick={() => editor?.chain().focus().setCallout('info').run()}>
+            提示块
+          </ToolbarButton>
           <ToolbarButton active={editor?.isActive('link')} disabled={busy} onClick={setLink}>
             链接
           </ToolbarButton>
           <ToolbarButton disabled={busy} onClick={() => imageInputRef.current?.click()}>
             图片
+          </ToolbarButton>
+          <ToolbarButton disabled={busy} onClick={() => attachmentInputRef.current?.click()}>
+            附件
           </ToolbarButton>
           <ToolbarButton disabled={busy} onClick={insertMermaid}>
             Mermaid
@@ -317,10 +468,19 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
             accept="image/*"
             onChange={handleImageSelected}
           />
+          <input
+            ref={attachmentInputRef}
+            className="hidden"
+            type="file"
+            onChange={handleAttachmentSelected}
+          />
         </div>
 
         <EditorContent editor={editor} />
-        <p className="text-sm text-gray-500">{status}</p>
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <p className="text-gray-500">{status}</p>
+          <span className="shrink-0 text-xs text-gray-400">{saveStateLabel(saveState)}</span>
+        </div>
 
         <details className="rounded-xl bg-gray-50 p-4 text-xs text-gray-500">
           <summary className="cursor-pointer select-none font-medium text-gray-700">查看当前 Tiptap JSON</summary>
@@ -328,6 +488,27 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
             {JSON.stringify(content, null, 2)}
           </pre>
         </details>
+        {previewOpen ? (
+          <div className="rounded-2xl border border-brand-100 bg-gray-100 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-gray-900">用户视角预览</div>
+                <div className="text-xs text-gray-500">预览当前编辑稿，不会影响线上内容。</div>
+              </div>
+              <button
+                className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+              >
+                关闭预览
+              </button>
+            </div>
+            <DocumentReader
+              assetScope="admin"
+              document={{ documentId: document.documentId, title, content }}
+            />
+          </div>
+        ) : null}
       </div>
       <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3 text-xs text-gray-500">
         <span>draftRevision: {draftRevision}</span>
@@ -359,4 +540,16 @@ function ToolbarButton({ active, disabled, children, onClick }: ToolbarButtonPro
       {children}
     </button>
   );
+}
+
+function saveStateLabel(state: SaveState) {
+  const labels: Record<SaveState, string> = {
+    idle: '尚未编辑',
+    dirty: '等待自动保存',
+    saving: '保存中...',
+    saved: '已保存',
+    failed: '保存失败，可点击立即保存重试',
+    conflict: '编辑冲突，自动保存已停止',
+  };
+  return labels[state];
 }

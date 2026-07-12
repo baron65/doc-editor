@@ -40,6 +40,7 @@ class DocumentAssetControllerTest {
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
                 .contains("inline")
                 .contains("filename*=");
+        assertThat(response.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
         assertThat(response.getBody()).isNotNull();
     }
 }

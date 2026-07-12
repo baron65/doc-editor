@@ -89,7 +89,7 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
         DocumentNodePO node = requireDocumentNode(documentId);
         DocumentPO document = requireDocument(documentId);
         if (!dto.getExpectedDraftRevision().equals(document.getDraftRevision())) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "draft revision conflict");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_VERSION_CONFLICT, "draft revision conflict");
         }
 
         String normalizedTitle = normalizeRequiredTitle(dto.getTitle());
@@ -112,12 +112,16 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
         documentNodeMapper.updateById(node);
 
         long nextDraftRevision = document.getDraftRevision() + 1;
-        document.setDraftSchemaVersion(dto.getSchemaVersion());
-        document.setDraftContentJson(contentJson);
-        document.setDraftRevision(nextDraftRevision);
-        document.setDraftUpdatedBy(SYSTEM_USER_ID);
-        document.setDraftUpdatedAt(now);
-        documentMapper.updateById(document);
+        int updatedRows = documentMapper.updateDraftIfRevisionMatches(
+                documentId,
+                dto.getExpectedDraftRevision(),
+                dto.getSchemaVersion(),
+                contentJson,
+                SYSTEM_USER_ID,
+                now);
+        if (updatedRows != 1) {
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_VERSION_CONFLICT, "draft revision conflict");
+        }
         replaceDraftAssetRefs(documentId, draftAssetIds, now);
 
         DocumentOperationVO operation = DocumentOperationVO.empty();

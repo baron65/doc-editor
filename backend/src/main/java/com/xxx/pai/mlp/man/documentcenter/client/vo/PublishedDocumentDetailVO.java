@@ -10,6 +10,7 @@ public class PublishedDocumentDetailVO {
     private Map<String, Object> content;
     private String publishedRevision;
     private String publicationVersion;
+    private String publishedAt;
 
     public String getDocumentId() {
         return documentId;
@@ -58,5 +59,12 @@ public class PublishedDocumentDetailVO {
     public void setPublicationVersion(String publicationVersion) {
         this.publicationVersion = publicationVersion;
     }
-}
 
+    public String getPublishedAt() {
+        return publishedAt;
+    }
+
+    public void setPublishedAt(String publishedAt) {
+        this.publishedAt = publishedAt;
+    }
+}

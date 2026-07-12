@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentTreeMetaMapper">
+    <update id="incrementRevisionIfMatches">
+        UPDATE doc_tree_meta
+        SET tree_revision = tree_revision + 1,
+            updated_at = #{updatedAt}
+        WHERE meta_id = #{metaId}
+          AND tree_revision = #{expectedTreeRevision}
+    </update>
 </mapper>
-

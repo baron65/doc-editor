@@ -304,6 +304,7 @@ export default function AdminDocumentCenterPage() {
           <DocumentTreePanel
             nodes={typedTree?.nodes ?? []}
             activeNodeId={selectedNode?.id}
+            searchable
             onSelect={(node) => {
               setSelectedNode(node);
               if (node.nodeType === 'DOCUMENT') {

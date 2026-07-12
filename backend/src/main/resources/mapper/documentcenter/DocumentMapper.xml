@@ -1,5 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentMapper">
-</mapper>
+    <update id="updateDraftIfRevisionMatches">
+        UPDATE doc_document
+        SET draft_schema_version = #{schemaVersion},
+            draft_content_json = #{contentJson},
+            draft_revision = draft_revision + 1,
+            draft_updated_by = #{updatedBy},
+            draft_updated_at = #{updatedAt}
+        WHERE document_id = #{documentId}
+          AND draft_revision = #{expectedDraftRevision}
+    </update>
 
+    <update id="publishIfRevisionsMatch">
+        UPDATE doc_document
+        SET published_schema_version = draft_schema_version,
+            published_content_json = draft_content_json,
+            published_revision = draft_revision,
+            publication_version = publication_version + 1,
+            is_published = 1,
+            published_by = #{publishedBy},
+            published_at = #{publishedAt}
+        WHERE document_id = #{documentId}
+          AND draft_revision = #{expectedDraftRevision}
+          AND publication_version = #{expectedPublicationVersion}
+    </update>
+
+    <update id="unpublishIfPublicationVersionMatches">
+        UPDATE doc_document
+        SET published_schema_version = NULL,
+            published_content_json = NULL,
+            published_revision = NULL,
+            publication_version = publication_version + 1,
+            is_published = 0
+        WHERE document_id = #{documentId}
+          AND is_published = 1
+          AND publication_version = #{expectedPublicationVersion}
+    </update>
+</mapper>

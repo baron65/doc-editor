@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -23,6 +25,9 @@ public class PublishedDocumentQueryServiceImpl implements PublishedDocumentQuery
 
     private static final String NODE_TYPE_DOCUMENT = "DOCUMENT";
     private static final int MAX_SEARCH_LIMIT = 50;
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter OFFSET_DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
     private final DocumentNodeMapper documentNodeMapper;
     private final DocumentMapper documentMapper;
@@ -100,6 +105,11 @@ public class PublishedDocumentQueryServiceImpl implements PublishedDocumentQuery
         detail.setContent(documentJsonUtils.fromJson(document.getPublishedContentJson()));
         detail.setPublishedRevision(String.valueOf(document.getPublishedRevision()));
         detail.setPublicationVersion(String.valueOf(document.getPublicationVersion()));
+        if (document.getPublishedAt() != null) {
+            detail.setPublishedAt(document.getPublishedAt()
+                    .atZone(BUSINESS_ZONE)
+                    .format(OFFSET_DATE_TIME_FORMATTER));
+        }
         return detail;
     }
 }

@@ -1,6 +1,7 @@
 package com.xxx.pai.mlp.man.documentcenter.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,8 @@ import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentNodeMapper;
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentContentAssetExtractor;
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentJsonUtils;
+import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentBusinessException;
+import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentErrorCode;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -50,7 +53,8 @@ class DocumentDraftServiceImplTest {
         when(documentNodeMapper.selectCount(any())).thenReturn(0L);
         when(documentAssetMapper.selectCount(any())).thenReturn(2L);
         when(documentNodeMapper.updateById(any(DocumentNodePO.class))).thenReturn(1);
-        when(documentMapper.updateById(any(DocumentPO.class))).thenReturn(1);
+        when(documentMapper.updateDraftIfRevisionMatches(
+                any(), any(), any(), any(), any(), any())).thenReturn(1);
         when(documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, "DRAFT")).thenReturn(0);
         when(documentAssetRefMapper.insertBatch(any())).thenReturn(2);
 
@@ -88,6 +92,38 @@ class DocumentDraftServiceImplTest {
                     assertThat(ref.getCreatedAt()).isNotNull();
                 });
         assertThat(operation.getDraftRevision()).isEqualTo("4");
+    }
+
+    @Test
+    void saveDraftRejectsConcurrentDatabaseUpdate() {
+        Long documentId = 100L;
+        when(documentNodeMapper.selectById(documentId)).thenReturn(documentNode(documentId));
+        when(documentMapper.selectById(documentId)).thenReturn(document(documentId));
+        when(documentNodeMapper.selectCount(any())).thenReturn(0L);
+        when(documentNodeMapper.updateById(any(DocumentNodePO.class))).thenReturn(1);
+        when(documentMapper.updateDraftIfRevisionMatches(
+                any(), any(), any(), any(), any(), any())).thenReturn(0);
+
+        DocumentDraftServiceImpl service = new DocumentDraftServiceImpl(
+                documentNodeMapper,
+                documentMapper,
+                documentAssetMapper,
+                documentAssetRefMapper,
+                new DocumentNameAbility(),
+                new DocumentContentAbility(),
+                new DocumentJsonUtils(new ObjectMapper()),
+                new DocumentContentAssetExtractor());
+        DocumentDraftDTO dto = new DocumentDraftDTO();
+        dto.setTitle("并发草稿");
+        dto.setSchemaVersion(1);
+        dto.setExpectedDraftRevision(3L);
+        dto.setContent(Map.of("type", "doc", "content", List.of()));
+
+        assertThatThrownBy(() -> service.saveDraft(documentId, dto))
+                .isInstanceOf(DocumentBusinessException.class)
+                .isInstanceOfSatisfying(DocumentBusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(DocumentErrorCode.DOCUMENT_VERSION_CONFLICT))
+                .hasMessageContaining("draft revision conflict");
     }
 
     private static DocumentNodePO documentNode(Long documentId) {

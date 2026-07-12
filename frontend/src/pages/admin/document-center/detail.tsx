@@ -29,6 +29,7 @@ export default function AdminDocumentDetailPage() {
         <DocumentTreePanel
           nodes={tree?.nodes ?? []}
           activeDocumentId={documentId}
+          searchable
           onSelect={(node) => {
             if (node.nodeType === 'DOCUMENT') {
               history.push(`/admin/document-center/${node.id}`);

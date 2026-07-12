@@ -71,14 +71,15 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
         node.setUpdatedAt(now);
         documentNodeMapper.updateById(node);
 
-        document.setPublishedSchemaVersion(document.getDraftSchemaVersion());
-        document.setPublishedContentJson(document.getDraftContentJson());
-        document.setPublishedRevision(document.getDraftRevision());
-        document.setPublicationVersion(nextPublicationVersion);
-        document.setIsPublished(1);
-        document.setPublishedBy(SYSTEM_USER_ID);
-        document.setPublishedAt(now);
-        documentMapper.updateById(document);
+        int publishedRows = documentMapper.publishIfRevisionsMatch(
+                documentId,
+                dto.getExpectedDraftRevision(),
+                document.getPublicationVersion(),
+                SYSTEM_USER_ID,
+                now);
+        if (publishedRows != 1) {
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_VERSION_CONFLICT, "publication revision conflict");
+        }
         documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, REF_SCOPE_PUBLISHED);
         documentAssetRefMapper.copyDraftRefsToPublished(documentId);
 
@@ -86,7 +87,7 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
         DocumentOperationVO operation = DocumentOperationVO.empty();
         operation.setId(String.valueOf(documentId));
         operation.setDraftRevision(String.valueOf(document.getDraftRevision()));
-        operation.setPublishedRevision(String.valueOf(document.getPublishedRevision()));
+        operation.setPublishedRevision(String.valueOf(document.getDraftRevision()));
         operation.setPublicationVersion(String.valueOf(nextPublicationVersion));
         operation.setTreeRevision(String.valueOf(treeRevision));
         operation.setPublishState("PUBLISHED");
@@ -123,12 +124,12 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
         node.setUpdatedAt(now);
         documentNodeMapper.updateById(node);
 
-        document.setIsPublished(0);
-        document.setPublishedSchemaVersion(null);
-        document.setPublishedContentJson(null);
-        document.setPublishedRevision(null);
-        document.setPublicationVersion(nextPublicationVersion);
-        documentMapper.updateById(document);
+        int unpublishedRows = documentMapper.unpublishIfPublicationVersionMatches(
+                documentId,
+                dto.getExpectedPublicationVersion());
+        if (unpublishedRows != 1) {
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_PUBLICATION_CONFLICT, "publication version conflict");
+        }
         documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, REF_SCOPE_PUBLISHED);
 
         long treeRevision = bumpTreeRevision();
@@ -161,13 +162,13 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
 
     private void assertDraftRevision(Long expectedDraftRevision, Long currentDraftRevision) {
         if (!documentPublishAbility.canPublish(expectedDraftRevision, currentDraftRevision)) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "draft revision conflict");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_VERSION_CONFLICT, "draft revision conflict");
         }
     }
 
     private void assertPublicationVersion(Long expectedPublicationVersion, Long currentPublicationVersion) {
         if (expectedPublicationVersion != null && !expectedPublicationVersion.equals(currentPublicationVersion)) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "publication version conflict");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_PUBLICATION_CONFLICT, "publication version conflict");
         }
     }
 
@@ -194,9 +195,13 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
             documentTreeMetaMapper.insert(treeMeta);
         }
         long newRevision = treeMeta.getTreeRevision() + 1;
-        treeMeta.setTreeRevision(newRevision);
-        treeMeta.setUpdatedAt(LocalDateTime.now());
-        documentTreeMetaMapper.updateById(treeMeta);
+        int updatedRows = documentTreeMetaMapper.incrementRevisionIfMatches(
+                ROOT_META_ID,
+                treeMeta.getTreeRevision(),
+                LocalDateTime.now());
+        if (updatedRows != 1) {
+            throw new DocumentBusinessException(DocumentErrorCode.TREE_VERSION_CONFLICT, "tree revision conflict");
+        }
         return newRevision;
     }
 }

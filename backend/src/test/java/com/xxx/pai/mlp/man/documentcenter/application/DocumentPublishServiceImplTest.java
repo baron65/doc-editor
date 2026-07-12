@@ -1,6 +1,7 @@
 package com.xxx.pai.mlp.man.documentcenter.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,8 @@ import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentAssetRefMapp
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentNodeMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentTreeMetaMapper;
+import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentBusinessException;
+import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -49,8 +52,8 @@ class DocumentPublishServiceImplTest {
         when(documentNodeMapper.selectCount(any())).thenReturn(0L);
         when(documentTreeMetaMapper.selectById(1)).thenReturn(treeMeta);
         when(documentNodeMapper.updateById(any(DocumentNodePO.class))).thenReturn(1);
-        when(documentMapper.updateById(any(DocumentPO.class))).thenReturn(1);
-        when(documentTreeMetaMapper.updateById(any(DocumentTreeMetaPO.class))).thenReturn(1);
+        when(documentMapper.publishIfRevisionsMatch(any(), any(), any(), any(), any())).thenReturn(1);
+        when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(1);
         when(documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, "PUBLISHED")).thenReturn(0);
         when(documentAssetRefMapper.copyDraftRefsToPublished(documentId)).thenReturn(2);
 
@@ -84,8 +87,8 @@ class DocumentPublishServiceImplTest {
         when(documentMapper.selectById(documentId)).thenReturn(document);
         when(documentTreeMetaMapper.selectById(1)).thenReturn(treeMeta);
         when(documentNodeMapper.updateById(any(DocumentNodePO.class))).thenReturn(1);
-        when(documentMapper.updateById(any(DocumentPO.class))).thenReturn(1);
-        when(documentTreeMetaMapper.updateById(any(DocumentTreeMetaPO.class))).thenReturn(1);
+        when(documentMapper.unpublishIfPublicationVersionMatches(any(), any())).thenReturn(1);
+        when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(1);
 
         DocumentPublishServiceImpl service = new DocumentPublishServiceImpl(
                 documentNodeMapper,
@@ -101,18 +104,64 @@ class DocumentPublishServiceImplTest {
 
         assertThat(node.getPublishedName()).isNull();
         assertThat(node.getPublishedNameKey()).isNull();
-        assertThat(document.getIsPublished()).isZero();
-        assertThat(document.getPublishedSchemaVersion()).isNull();
-        assertThat(document.getPublishedContentJson()).isNull();
-        assertThat(document.getPublishedRevision()).isNull();
-        assertThat(document.getPublicationVersion()).isEqualTo(8L);
-        assertThat(treeMeta.getTreeRevision()).isEqualTo(22L);
         assertThat(result.getPublicationVersion()).isEqualTo("8");
         assertThat(result.getPublishedRevision()).isNull();
         assertThat(result.getTreeRevision()).isEqualTo("22");
         assertThat(result.getPublishState()).isEqualTo("DRAFT");
         assertThat(result.getAlreadyUnpublished()).isFalse();
         verify(documentAssetRefMapper).deleteByDocumentIdAndRefScope(documentId, "PUBLISHED");
+    }
+
+    @Test
+    void publishRejectsRevisionChangedAfterInitialRead() {
+        Long documentId = 100L;
+        when(documentNodeMapper.selectById(documentId)).thenReturn(draftNode(documentId));
+        when(documentMapper.selectById(documentId)).thenReturn(draftDocument(documentId));
+        when(documentNodeMapper.selectCount(any())).thenReturn(0L);
+        when(documentNodeMapper.updateById(any(DocumentNodePO.class))).thenReturn(1);
+        when(documentMapper.publishIfRevisionsMatch(any(), any(), any(), any(), any())).thenReturn(0);
+
+        DocumentPublishServiceImpl service = new DocumentPublishServiceImpl(
+                documentNodeMapper,
+                documentMapper,
+                documentTreeMetaMapper,
+                documentAssetRefMapper,
+                new DocumentPublishAbility(),
+                new DocumentNameAbility());
+        DocumentPublishDTO dto = new DocumentPublishDTO();
+        dto.setExpectedDraftRevision(5L);
+        dto.setExpectedPublicationVersion(0L);
+
+        assertThatThrownBy(() -> service.publish(documentId, dto))
+                .isInstanceOf(DocumentBusinessException.class)
+                .isInstanceOfSatisfying(DocumentBusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(DocumentErrorCode.DOCUMENT_VERSION_CONFLICT))
+                .hasMessageContaining("publication revision conflict");
+    }
+
+    @Test
+    void unpublishRejectsStalePublicationVersion() {
+        Long documentId = 100L;
+        when(documentNodeMapper.selectById(documentId)).thenReturn(publishedNode(documentId));
+        when(documentMapper.selectById(documentId)).thenReturn(publishedDocument(documentId));
+        when(documentNodeMapper.updateById(any(DocumentNodePO.class))).thenReturn(1);
+        when(documentMapper.unpublishIfPublicationVersionMatches(any(), any())).thenReturn(0);
+
+        DocumentPublishServiceImpl service = new DocumentPublishServiceImpl(
+                documentNodeMapper,
+                documentMapper,
+                documentTreeMetaMapper,
+                documentAssetRefMapper,
+                new DocumentPublishAbility(),
+                new DocumentNameAbility());
+        DocumentUnpublishDTO dto = new DocumentUnpublishDTO();
+        dto.setExpectedPublicationVersion(7L);
+
+        assertThatThrownBy(() -> service.unpublish(documentId, dto))
+                .isInstanceOf(DocumentBusinessException.class)
+                .isInstanceOfSatisfying(DocumentBusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(DocumentErrorCode.DOCUMENT_PUBLICATION_CONFLICT))
+                .hasMessageContaining("publication version conflict");
     }
 
     private static DocumentNodePO draftNode(Long documentId) {

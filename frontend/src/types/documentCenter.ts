@@ -54,6 +54,7 @@ export interface PublishedDocumentDetail {
   content: DocumentContent;
   publishedRevision: string;
   publicationVersion: string;
+  publishedAt?: string;
 }
 
 export interface DocumentAsset {
