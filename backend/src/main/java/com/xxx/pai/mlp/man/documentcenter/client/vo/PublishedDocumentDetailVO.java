@@ -1,6 +1,7 @@
 package com.xxx.pai.mlp.man.documentcenter.client.vo;
 
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 public class PublishedDocumentDetailVO {
 
@@ -11,6 +12,7 @@ public class PublishedDocumentDetailVO {
     private String publishedRevision;
     private String publicationVersion;
     private String publishedAt;
+    private Map<String, PublishedAssetVO> assets = new LinkedHashMap<>();
 
     public String getDocumentId() {
         return documentId;
@@ -66,5 +68,13 @@ public class PublishedDocumentDetailVO {
 
     public void setPublishedAt(String publishedAt) {
         this.publishedAt = publishedAt;
+    }
+
+    public Map<String, PublishedAssetVO> getAssets() {
+        return assets;
+    }
+
+    public void setAssets(Map<String, PublishedAssetVO> assets) {
+        this.assets = assets;
     }
 }

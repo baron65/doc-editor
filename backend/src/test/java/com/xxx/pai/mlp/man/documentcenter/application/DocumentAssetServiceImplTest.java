@@ -49,7 +49,7 @@ class DocumentAssetServiceImplTest {
                 "file",
                 "architecture.png",
                 "image/png",
-                "image-bytes".getBytes());
+                new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01});
         when(documentIdGenerator.nextId()).thenReturn(assetId);
         when(objectStorage.put(any(String.class), any(InputStream.class), eq(file.getSize()), eq("image/png")))
                 .thenAnswer(invocation -> new StoredObject(

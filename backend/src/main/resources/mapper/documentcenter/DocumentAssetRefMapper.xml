@@ -30,4 +30,12 @@
           AND asset_id = #{assetId}
           AND ref_scope = #{refScope}
     </select>
+
+    <select id="selectAssetIdsByDocumentAndScope" resultType="long">
+        SELECT asset_id
+        FROM doc_asset_ref
+        WHERE document_id = #{documentId}
+          AND ref_scope = #{refScope}
+        ORDER BY asset_id
+    </select>
 </mapper>

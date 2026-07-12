@@ -85,3 +85,51 @@ test('Reader 展示发布时间、页内目录和前后篇导航', () => {
   assert.match(html, /href="\/document-center\/11"/);
   assert.match(html, /href="\/document-center\/13"/);
 });
+
+test('Reader renders highlighted code with language and copy action', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: '13',
+        title: '代码示例',
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'codeBlock',
+              attrs: { language: 'java' },
+              content: [{ type: 'text', text: 'public class Demo {}' }],
+            },
+          ],
+        },
+      }}
+    />,
+  );
+  assert.match(html, /data-code-language="java"/);
+  assert.match(html, /hljs-keyword/);
+  assert.match(html, /复制/);
+});
+
+test('Reader does not render dangerous persisted link protocols', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: '14',
+        title: '安全链接',
+        content: {
+          type: 'doc',
+          content: [{
+            type: 'paragraph',
+            content: [{
+              type: 'text',
+              text: '不要点击',
+              marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }],
+            }],
+          }],
+        },
+      }}
+    />,
+  );
+  assert.doesNotMatch(html, /javascript:/i);
+  assert.doesNotMatch(html, /target="_blank"/);
+});

@@ -18,4 +18,8 @@ public interface DocumentAssetRefMapper {
             @Param("documentId") Long documentId,
             @Param("assetId") Long assetId,
             @Param("refScope") String refScope);
+
+    List<Long> selectAssetIdsByDocumentAndScope(
+            @Param("documentId") Long documentId,
+            @Param("refScope") String refScope);
 }

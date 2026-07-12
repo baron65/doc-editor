@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentNodeMapper">
+    <select id="searchPublishedByNameKey" resultType="com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentNodePO">
+        SELECT id, parent_id, node_type, draft_name, draft_name_key,
+               published_name, published_name_key, sort_order, node_version,
+               created_by, created_at, updated_by, updated_at
+        FROM doc_node
+        WHERE node_type = 'DOCUMENT'
+          AND published_name_key LIKE CONCAT('%', #{escapedKeyword}, '%') ESCAPE '\\'
+        ORDER BY sort_order ASC, id ASC
+        LIMIT #{limit}
+    </select>
 </mapper>
-

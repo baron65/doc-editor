@@ -7,11 +7,13 @@ import type {
   DocumentOperation,
   DocumentTree,
   PublishedDocumentDetail,
+  PublishedDocumentSearch,
 } from '@/types/documentCenter';
+import { DocumentApiError } from './documentApiError';
 
 function unwrap<T>(response: CommonResponse<T>): T {
   if (response.code !== '0') {
-    throw new Error(response.message || `Request failed: ${response.code}`);
+    throw new DocumentApiError(response.message || `Request failed: ${response.code}`, response.code);
   }
   return response.data;
 }
@@ -34,7 +36,7 @@ export async function getPublishedDocument(documentId: string) {
 
 export async function searchPublishedDocuments(q: string, limit = 20) {
   return unwrap(
-    await request<CommonResponse<PublishedDocumentDetail[]>>('/api/v1/document-center/search', {
+    await request<CommonResponse<PublishedDocumentSearch>>('/api/v1/document-center/search', {
       params: { q, limit },
     }),
   );
@@ -52,7 +54,7 @@ export async function getAdminDocument(documentId: string) {
   );
 }
 
-export async function createDocument(parentId: string, title: string, expectedTreeRevision?: string) {
+export async function createDocument(parentId: string, title: string, expectedTreeRevision?: string, targetIndex?: number) {
   return unwrap(
     await request<CommonResponse<DocumentOperation>>('/api/v1/document-center/admin/documents', {
       method: 'POST',
@@ -60,12 +62,13 @@ export async function createDocument(parentId: string, title: string, expectedTr
         parentId: Number(parentId),
         title,
         expectedTreeRevision: expectedTreeRevision ? Number(expectedTreeRevision) : undefined,
+        targetIndex,
       },
     }),
   );
 }
 
-export async function createDirectory(parentId: string, name: string, expectedTreeRevision?: string) {
+export async function createDirectory(parentId: string, name: string, expectedTreeRevision?: string, targetIndex?: number) {
   return unwrap(
     await request<CommonResponse<DocumentOperation>>('/api/v1/document-center/admin/directories', {
       method: 'POST',
@@ -73,6 +76,7 @@ export async function createDirectory(parentId: string, name: string, expectedTr
         parentId: Number(parentId),
         name,
         expectedTreeRevision: expectedTreeRevision ? Number(expectedTreeRevision) : undefined,
+        targetIndex,
       },
     }),
   );

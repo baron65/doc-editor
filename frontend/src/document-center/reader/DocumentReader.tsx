@@ -1,8 +1,9 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MermaidRenderer } from '../mermaid/MermaidRenderer';
 import type { DocumentContent } from '../../types/documentCenter';
 import { buildAssetUrl, formatFileSize, type AssetScope } from './assetPresentation';
-import { buildReaderContent, type DocumentNavigationItem } from './readerModel';
+import { buildReaderContent, selectActiveHeadingId, type DocumentNavigationItem } from './readerModel';
+import { CodeBlock } from './CodeBlock';
 
 export interface ReaderDocument {
   documentId: string;
@@ -19,10 +20,45 @@ interface DocumentReaderProps {
 }
 
 export function DocumentReader({ document, assetScope = 'published', previous, next }: DocumentReaderProps) {
+  const articleRef = useRef<HTMLElement>(null);
   const readerContent = useMemo(
     () => buildReaderContent(document?.content ?? { type: 'doc', content: [] }),
     [document?.content],
   );
+  const [activeHeadingId, setActiveHeadingId] = useState<string>();
+
+  useEffect(() => {
+    setActiveHeadingId(readerContent.headings[0]?.id);
+    if (!readerContent.headings.length) {
+      return undefined;
+    }
+    let animationFrame = 0;
+    const updateActiveHeading = () => {
+      animationFrame = 0;
+      const positions = Array.from(
+        articleRef.current?.querySelectorAll<HTMLElement>('[data-reader-heading-id]') ?? [],
+      ).map((heading) => ({
+        id: heading.dataset.readerHeadingId ?? '',
+        top: heading.getBoundingClientRect().top,
+      }));
+      setActiveHeadingId(selectActiveHeadingId(positions, 120));
+    };
+    const scheduleUpdate = () => {
+      if (!animationFrame) {
+        animationFrame = window.requestAnimationFrame(updateActiveHeading);
+      }
+    };
+    scheduleUpdate();
+    globalThis.document.addEventListener('scroll', scheduleUpdate, true);
+    window.addEventListener('resize', scheduleUpdate);
+    return () => {
+      globalThis.document.removeEventListener('scroll', scheduleUpdate, true);
+      window.removeEventListener('resize', scheduleUpdate);
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [readerContent.headings]);
   if (!document) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
@@ -33,7 +69,7 @@ export function DocumentReader({ document, assetScope = 'published', previous, n
 
   return (
     <div className="flex min-w-0 items-start gap-6">
-      <article className="document-content min-w-0 flex-1 rounded-xl bg-white p-8 shadow-sm">
+      <article ref={articleRef} className="document-content min-w-0 flex-1 rounded-xl bg-white p-8 shadow-sm">
         <h1 className="mb-2 text-3xl font-semibold text-gray-950">{document.title}</h1>
         {document.publishedAt ? (
           <div className="mb-6 text-xs text-gray-400">最后发布：{formatPublishedAt(document.publishedAt)}</div>
@@ -55,7 +91,12 @@ export function DocumentReader({ document, assetScope = 'published', previous, n
             {readerContent.headings.map((heading) => (
               <a
                 key={heading.id}
-                className={`block text-gray-500 hover:text-brand-600 ${heading.level === 3 ? 'pl-3 text-xs' : ''}`}
+                aria-current={activeHeadingId === heading.id ? 'location' : undefined}
+                className={`block border-l-2 pl-2 transition-colors ${
+                  activeHeadingId === heading.id
+                    ? 'border-brand-500 font-medium text-brand-700'
+                    : 'border-transparent text-gray-500 hover:text-brand-600'
+                } ${heading.level === 3 ? 'ml-3 text-xs' : ''}`}
                 href={`#${heading.id}`}
               >
                 {heading.text}
@@ -86,9 +127,9 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
         return <h1 key={key}>{children}</h1>;
       }
       if (level === 3) {
-        return <h3 id={stringAttribute(node.attrs?.readerId)} key={key}>{children}</h3>;
+        return <h3 id={stringAttribute(node.attrs?.readerId)} data-reader-heading-id={stringAttribute(node.attrs?.readerId)} key={key}>{children}</h3>;
       }
-      return <h2 id={stringAttribute(node.attrs?.readerId)} key={key}>{children}</h2>;
+      return <h2 id={stringAttribute(node.attrs?.readerId)} data-reader-heading-id={stringAttribute(node.attrs?.readerId)} key={key}>{children}</h2>;
     }
     case 'bulletList':
       return <ul key={key}>{renderChildren(node.content, documentId, assetScope)}</ul>;
@@ -99,11 +140,7 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
     case 'blockquote':
       return <blockquote key={key}>{renderChildren(node.content, documentId, assetScope)}</blockquote>;
     case 'codeBlock':
-      return (
-        <pre key={key}>
-          <code>{extractText(node)}</code>
-        </pre>
-      );
+      return <CodeBlock key={key} code={extractText(node)} language={stringAttribute(node.attrs?.language)} />;
     case 'table':
       return (
         <div key={key} className="my-5 overflow-x-auto rounded-xl border border-gray-200">
@@ -163,8 +200,11 @@ function applyMarks(text: string, node: DocumentContent, key: number): ReactNode
         return <code>{current}</code>;
       case 'link': {
         const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : '#';
+        if (!isSafeHref(href)) {
+          return current;
+        }
         return (
-          <a href={href} target="_blank" rel="noreferrer">
+          <a key={key} href={href} target="_blank" rel="noopener noreferrer">
             {current}
           </a>
         );
@@ -254,6 +294,19 @@ function NavigationLink({ direction, item }: { direction: 'previous' | 'next'; i
 
 function stringAttribute(value: unknown) {
   return typeof value === 'string' ? value : undefined;
+}
+
+function isSafeHref(href: string) {
+  const value = href.trim();
+  if (value.startsWith('#') || (value.startsWith('/') && !value.startsWith('//'))) {
+    return true;
+  }
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:', 'mailto:'].includes(url.protocol);
+  } catch {
+    return false;
+  }
 }
 
 function formatPublishedAt(value: string) {

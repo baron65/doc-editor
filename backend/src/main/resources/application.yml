@@ -22,6 +22,9 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 document-center:
+  asset:
+    image-extensions: ${DOCUMENT_CENTER_IMAGE_EXTENSIONS:jpg,jpeg,png,webp}
+    attachment-extensions: ${DOCUMENT_CENTER_ATTACHMENT_EXTENSIONS:pdf,txt,md,csv,docx,xlsx,pptx,zip}
   storage:
     type: ${DOCUMENT_CENTER_STORAGE_TYPE:s3}
     root-path: ${DOCUMENT_CENTER_STORAGE_ROOT_PATH:./data/document-center/objects}

@@ -2,6 +2,11 @@ import { useMemo, useState } from 'react';
 import { history, useRequest } from '@umijs/max';
 import { DocumentTreePanel } from '@/document-center/tree/DocumentTreePanel';
 import {
+  flattenTreeNodes,
+  getMoveTargetDirectories,
+  getTargetAppendIndex,
+} from '@/document-center/tree/treeManagementModel';
+import {
   createDirectory,
   createDocument,
   deleteNode,
@@ -29,7 +34,12 @@ export default function AdminDocumentCenterPage() {
   const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>();
-  const flatNodes = useMemo(() => flattenNodes(typedTree?.nodes ?? []), [typedTree?.nodes]);
+  const [moveTargetParentId, setMoveTargetParentId] = useState('0');
+  const flatNodes = useMemo(() => flattenTreeNodes(typedTree?.nodes ?? []), [typedTree?.nodes]);
+  const moveTargets = useMemo(
+    () => getMoveTargetDirectories(typedTree?.nodes ?? [], selectedNode),
+    [selectedNode, typedTree?.nodes],
+  );
   const selectedSiblingInfo = useMemo(
     () => getSiblingInfo(flatNodes, selectedNode),
     [flatNodes, selectedNode],
@@ -79,8 +89,9 @@ export default function AdminDocumentCenterPage() {
         type: 'success',
         message: createKind === 'DOCUMENT' ? '文档已创建。' : '目录已创建。',
       });
-      if (createKind === 'DOCUMENT' && operation.id) {
-        history.push(`/admin/document-center/${operation.id}`);
+      const createdDocumentId = operation.documentId ?? operation.id;
+      if (createKind === 'DOCUMENT' && createdDocumentId) {
+        history.push(`/admin/document-center/${createdDocumentId}`);
       }
     } catch (error) {
       setFeedback({
@@ -155,6 +166,47 @@ export default function AdminDocumentCenterPage() {
       setFeedback({ type: 'success', message: '节点顺序已更新。' });
     } catch (error) {
       setFeedback({ type: 'error', message: getErrorMessage(error, '移动节点失败。') });
+    }
+  };
+
+  const handleMoveToDirectory = async () => {
+    if (!selectedNode || !typedTree?.treeRevision) {
+      return;
+    }
+    setFeedback(undefined);
+    try {
+      await moveNode(selectedNode.id, {
+        targetParentId: moveTargetParentId,
+        targetIndex: getTargetAppendIndex(typedTree.nodes, moveTargetParentId, selectedNode),
+        expectedTreeRevision: typedTree.treeRevision,
+      });
+      setSelectedNode({ ...selectedNode, parentId: moveTargetParentId });
+      await refresh();
+      setFeedback({ type: 'success', message: '节点已移动到目标目录末尾。' });
+    } catch (error) {
+      setFeedback({ type: 'error', message: getErrorMessage(error, '跨目录移动失败。') });
+    }
+  };
+
+  const handleTreeDrop = async (
+    node: DocumentTreeNode,
+    destination: { targetParentId: string; targetIndex: number },
+  ) => {
+    if (!typedTree?.treeRevision) {
+      return;
+    }
+    setFeedback(undefined);
+    try {
+      await moveNode(node.id, {
+        ...destination,
+        expectedTreeRevision: typedTree.treeRevision,
+      });
+      setSelectedNode({ ...node, parentId: destination.targetParentId });
+      setMoveTargetParentId(destination.targetParentId);
+      await refresh();
+      setFeedback({ type: 'success', message: '拖拽移动已保存。' });
+    } catch (error) {
+      setFeedback({ type: 'error', message: getErrorMessage(error, '拖拽移动失败。') });
     }
   };
 
@@ -296,6 +348,29 @@ export default function AdminDocumentCenterPage() {
                 下移
               </button>
             </div>
+            <div className="mt-2 flex gap-2">
+              <select
+                aria-label="目标目录"
+                className="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
+                disabled={!selectedNode}
+                value={moveTargetParentId}
+                onChange={(event) => setMoveTargetParentId(event.target.value)}
+              >
+                {moveTargets.map((target) => (
+                  <option key={target.id} value={target.id}>
+                    {`${'　'.repeat(Math.max(0, target.depth - 1))}${target.title}`}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
+                type="button"
+                disabled={!selectedNode || !moveTargets.some((target) => target.id === moveTargetParentId)}
+                onClick={handleMoveToDirectory}
+              >
+                移动到
+              </button>
+            </div>
           </div>
         </div>
         {loading ? (
@@ -305,8 +380,11 @@ export default function AdminDocumentCenterPage() {
             nodes={typedTree?.nodes ?? []}
             activeNodeId={selectedNode?.id}
             searchable
+            showPublishState
+            onMoveNode={(node, destination) => void handleTreeDrop(node, destination)}
             onSelect={(node) => {
               setSelectedNode(node);
+              setMoveTargetParentId(node.parentId);
               if (node.nodeType === 'DOCUMENT') {
                 history.push(`/admin/document-center/${node.id}`);
               }
@@ -321,10 +399,6 @@ export default function AdminDocumentCenterPage() {
       </section>
     </main>
   );
-}
-
-function flattenNodes(nodes: DocumentTreeNode[]): DocumentTreeNode[] {
-  return nodes.flatMap((node) => [node, ...flattenNodes(node.children ?? [])]);
 }
 
 function getSiblingInfo(nodes: DocumentTreeNode[], selectedNode?: DocumentTreeNode) {

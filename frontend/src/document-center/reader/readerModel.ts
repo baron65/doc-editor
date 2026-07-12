@@ -11,6 +11,11 @@ export interface DocumentNavigationItem {
   title: string;
 }
 
+export interface HeadingPosition {
+  id: string;
+  top: number;
+}
+
 export function buildReaderContent(content: DocumentContent) {
   const headings: HeadingItem[] = [];
   const slugCounts = new Map<string, number>();
@@ -50,6 +55,20 @@ export function getDocumentNavigation(nodes: DocumentTreeNode[], documentId: str
     previous: toNavigationItem(documents[index - 1]),
     next: toNavigationItem(documents[index + 1]),
   };
+}
+
+export function selectActiveHeadingId(positions: HeadingPosition[], threshold: number) {
+  if (!positions.length) {
+    return undefined;
+  }
+  let active = positions[0].id;
+  for (const position of positions) {
+    if (position.top > threshold) {
+      break;
+    }
+    active = position.id;
+  }
+  return active;
 }
 
 function flattenDocuments(nodes: DocumentTreeNode[]): DocumentTreeNode[] {

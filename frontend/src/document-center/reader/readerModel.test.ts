@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { DocumentContent, DocumentTreeNode } from '../../types/documentCenter';
-import { buildReaderContent, getDocumentNavigation } from './readerModel';
+import { buildReaderContent, getDocumentNavigation, selectActiveHeadingId } from './readerModel';
 
 test('提取二三级标题并生成稳定且不重复的锚点', () => {
   const content: DocumentContent = {
@@ -43,4 +43,15 @@ test('按文档树深度优先顺序计算上一篇和下一篇', () => {
     previous: undefined,
     next: { id: '3', title: '第二篇' },
   });
+});
+
+test('selects the last heading that crossed the reading threshold', () => {
+  const positions = [
+    { id: 'intro', top: -300 },
+    { id: 'setup', top: 90 },
+    { id: 'deploy', top: 460 },
+  ];
+  assert.equal(selectActiveHeadingId(positions, 120), 'setup');
+  assert.equal(selectActiveHeadingId(positions, -400), 'intro');
+  assert.equal(selectActiveHeadingId([], 120), undefined);
 });

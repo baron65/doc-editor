@@ -3,6 +3,8 @@ package com.xxx.pai.mlp.man.documentcenter.client.vo;
 public class DocumentOperationVO {
 
     private String id;
+    private String nodeId;
+    private String documentId;
     private String draftRevision;
     private String publishedRevision;
     private String publicationVersion;
@@ -23,6 +25,22 @@ public class DocumentOperationVO {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getNodeId() {
+        return nodeId;
+    }
+
+    public void setNodeId(String nodeId) {
+        this.nodeId = nodeId;
+    }
+
+    public String getDocumentId() {
+        return documentId;
+    }
+
+    public void setDocumentId(String documentId) {
+        this.documentId = documentId;
     }
 
     public String getDraftRevision() {

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xxx.pai.mlp.man.documentcenter.client.dto.DocumentDraftDTO;
 import com.xxx.pai.mlp.man.documentcenter.client.vo.DocumentOperationVO;
+import com.xxx.pai.mlp.man.documentcenter.client.vo.AdminDocumentDetailVO;
 import com.xxx.pai.mlp.man.documentcenter.domain.ability.DocumentContentAbility;
 import com.xxx.pai.mlp.man.documentcenter.domain.ability.DocumentNameAbility;
 import com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentAssetRefPO;
@@ -24,6 +25,7 @@ import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentBusinessExcept
 import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentErrorCode;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -44,6 +46,32 @@ class DocumentDraftServiceImplTest {
 
     @Mock
     private DocumentAssetRefMapper documentAssetRefMapper;
+
+    @Test
+    void getDraftExposesSnapshotTitlesStateParentAndTimestamps() {
+        Long documentId = 100L;
+        DocumentNodePO node = documentNode(documentId);
+        node.setParentId(88L);
+        node.setDraftName("更新后的标题");
+        node.setPublishedName("旧线上标题");
+        DocumentPO document = document(documentId);
+        document.setIsPublished(1);
+        document.setPublishedRevision(2L);
+        document.setPublicationVersion(4L);
+        document.setDraftUpdatedAt(LocalDateTime.of(2026, 7, 12, 10, 30));
+        document.setPublishedAt(LocalDateTime.of(2026, 7, 11, 9, 15));
+        when(documentNodeMapper.selectById(documentId)).thenReturn(node);
+        when(documentMapper.selectById(documentId)).thenReturn(document);
+
+        AdminDocumentDetailVO result = service().getDraft(documentId);
+
+        assertThat(result.getParentId()).isEqualTo("88");
+        assertThat(result.getDraftTitle()).isEqualTo("更新后的标题");
+        assertThat(result.getPublishedTitle()).isEqualTo("旧线上标题");
+        assertThat(result.getPublishState()).isEqualTo("PUBLISHED_WITH_CHANGES");
+        assertThat(result.getDraftUpdatedAt()).isEqualTo("2026-07-12T10:30:00+08:00");
+        assertThat(result.getPublishedAt()).isEqualTo("2026-07-11T09:15:00+08:00");
+    }
 
     @Test
     void saveDraftReplacesDraftAssetReferencesFromContent() {
@@ -147,5 +175,17 @@ class DocumentDraftServiceImplTest {
         document.setPublicationVersion(0L);
         document.setIsPublished(0);
         return document;
+    }
+
+    private DocumentDraftServiceImpl service() {
+        return new DocumentDraftServiceImpl(
+                documentNodeMapper,
+                documentMapper,
+                documentAssetMapper,
+                documentAssetRefMapper,
+                new DocumentNameAbility(),
+                new DocumentContentAbility(),
+                new DocumentJsonUtils(new ObjectMapper()),
+                new DocumentContentAssetExtractor());
     }
 }

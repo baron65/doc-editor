@@ -147,7 +147,7 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
     private DocumentNodePO requireDocumentNode(Long documentId) {
         DocumentNodePO node = documentNodeMapper.selectById(documentId);
         if (node == null || !NODE_TYPE_DOCUMENT.equals(node.getNodeType())) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "document does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_NOT_FOUND, "document does not exist");
         }
         return node;
     }
@@ -155,7 +155,7 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
     private DocumentPO requireDocument(Long documentId) {
         DocumentPO document = documentMapper.selectById(documentId);
         if (document == null) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "document content does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_NOT_FOUND, "document content does not exist");
         }
         return document;
     }
@@ -174,14 +174,14 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
 
     private void ensurePublishedNameUnique(Long parentId, String publishedNameKey, Long excludeNodeId) {
         if (!StringUtils.hasText(publishedNameKey)) {
-            throw new DocumentBusinessException(DocumentErrorCode.VALIDATION_FAILED, "published name must not be blank");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_NODE_NAME, "published name must not be blank");
         }
         LambdaQueryWrapper<DocumentNodePO> queryWrapper = new LambdaQueryWrapper<DocumentNodePO>()
                 .eq(DocumentNodePO::getParentId, parentId)
                 .eq(DocumentNodePO::getPublishedNameKey, publishedNameKey)
                 .ne(DocumentNodePO::getId, excludeNodeId);
         if (documentNodeMapper.selectCount(queryWrapper) > 0) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "duplicate published name under the same parent");
+            throw new DocumentBusinessException(DocumentErrorCode.DUPLICATE_PUBLISHED_NAME, "duplicate published name under the same parent");
         }
     }
 

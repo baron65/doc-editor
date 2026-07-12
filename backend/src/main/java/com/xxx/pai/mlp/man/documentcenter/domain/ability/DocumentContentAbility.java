@@ -5,6 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.bo.ContentValidationResultBO;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
+import java.util.Locale;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -14,6 +19,14 @@ public class DocumentContentAbility {
     private static final int MAX_MERMAID_BLOCKS = 50;
     private static final int MAX_MERMAID_SOURCE_CHARS = 50 * 1024;
     private static final String NODE_TYPE_MERMAID = "mermaid";
+    private static final int MAX_NODES = 10_000;
+    private static final int MAX_DEPTH = 100;
+    private static final Set<String> ALLOWED_NODE_TYPES = Set.of(
+            "doc", "paragraph", "text", "heading", "bulletList", "orderedList", "listItem",
+            "blockquote", "codeBlock", "horizontalRule", "hardBreak", "image", "attachment",
+            "table", "tableRow", "tableHeader", "tableCell", "callout", "mermaid");
+    private static final Set<String> ALLOWED_MARK_TYPES = Set.of(
+            "bold", "italic", "underline", "strike", "code", "link");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -21,12 +34,16 @@ public class DocumentContentAbility {
         if (schemaVersion == null || schemaVersion < 1) {
             return ContentValidationResultBO.invalid("schemaVersion must be greater than 0");
         }
-        if (contentJson == null || contentJson.length() > MAX_CONTENT_JSON_BYTES) {
-            return ContentValidationResultBO.invalid("contentJson is empty or too large");
+        if (contentJson == null) {
+            return ContentValidationResultBO.invalid("contentJson is empty");
+        }
+        if (contentJson.getBytes(StandardCharsets.UTF_8).length > MAX_CONTENT_JSON_BYTES) {
+            return ContentValidationResultBO.tooLarge("contentJson is too large");
         }
         try {
             MermaidStats mermaidStats = new MermaidStats();
-            collectMermaidStats(objectMapper.readValue(contentJson, Object.class), mermaidStats);
+            Object root = objectMapper.readValue(contentJson, Object.class);
+            validateNode(root, mermaidStats, 0);
             if (mermaidStats.count > MAX_MERMAID_BLOCKS) {
                 return ContentValidationResultBO.invalid("Mermaid block count exceeds 50");
             }
@@ -35,30 +52,94 @@ public class DocumentContentAbility {
             }
         } catch (JsonProcessingException exception) {
             return ContentValidationResultBO.invalid("contentJson is not valid json");
+        } catch (ValidationFailure failure) {
+            return ContentValidationResultBO.invalid(failure.getMessage());
         }
         return ContentValidationResultBO.valid();
     }
 
     @SuppressWarnings("unchecked")
-    private void collectMermaidStats(Object value, MermaidStats mermaidStats) {
-        if (value instanceof Map) {
-            Map<String, Object> node = (Map<String, Object>) value;
-            if (NODE_TYPE_MERMAID.equals(node.get("type"))) {
-                mermaidStats.count++;
-                String source = resolveMermaidSource(node);
-                if (source.length() > MAX_MERMAID_SOURCE_CHARS) {
-                    mermaidStats.oversized = true;
-                }
-            }
-            for (Object child : node.values()) {
-                collectMermaidStats(child, mermaidStats);
-            }
-            return;
+    private void validateNode(Object value, MermaidStats stats, int depth) {
+        if (!(value instanceof Map)) {
+            throw new ValidationFailure("content node must be an object");
         }
-        if (value instanceof Collection) {
-            for (Object item : (Collection<?>) value) {
-                collectMermaidStats(item, mermaidStats);
+        if (depth > MAX_DEPTH) {
+            throw new ValidationFailure("content depth exceeds 100");
+        }
+        stats.nodeCount++;
+        if (stats.nodeCount > MAX_NODES) {
+            throw new ValidationFailure("content node count exceeds 10000");
+        }
+        Map<String, Object> node = (Map<String, Object>) value;
+        Object rawType = node.get("type");
+        if (!(rawType instanceof String) || !ALLOWED_NODE_TYPES.contains(rawType)) {
+            throw new ValidationFailure("unsupported node type");
+        }
+        String type = (String) rawType;
+        if (depth == 0 && !"doc".equals(type)) {
+            throw new ValidationFailure("root node type must be doc");
+        }
+        if (NODE_TYPE_MERMAID.equals(type)) {
+            stats.count++;
+            String source = resolveMermaidSource(node);
+            if (source.length() > MAX_MERMAID_SOURCE_CHARS) {
+                stats.oversized = true;
             }
+            String normalizedSource = source.toLowerCase();
+            if (normalizedSource.contains("javascript:") || normalizedSource.contains("<script")) {
+                throw new ValidationFailure("unsafe Mermaid source");
+            }
+        }
+        Object marks = node.get("marks");
+        if (marks != null) {
+            if (!(marks instanceof Collection)) {
+                throw new ValidationFailure("marks must be an array");
+            }
+            for (Object mark : (Collection<?>) marks) {
+                validateMark(mark);
+            }
+        }
+        Object content = node.get("content");
+        if (content != null) {
+            if (!(content instanceof Collection)) {
+                throw new ValidationFailure("content must be an array");
+            }
+            for (Object child : (Collection<?>) content) {
+                validateNode(child, stats, depth + 1);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateMark(Object value) {
+        if (!(value instanceof Map)) {
+            throw new ValidationFailure("mark must be an object");
+        }
+        Map<String, Object> mark = (Map<String, Object>) value;
+        Object rawType = mark.get("type");
+        if (!(rawType instanceof String) || !ALLOWED_MARK_TYPES.contains(rawType)) {
+            throw new ValidationFailure("unsupported mark type");
+        }
+        if ("link".equals(rawType)) {
+            Object attrs = mark.get("attrs");
+            Object href = attrs instanceof Map ? ((Map<String, Object>) attrs).get("href") : null;
+            if (!(href instanceof String) || !isSafeHref((String) href)) {
+                throw new ValidationFailure("unsafe link protocol");
+            }
+        }
+    }
+
+    private boolean isSafeHref(String href) {
+        String value = href.trim();
+        if (value.startsWith("#") || (value.startsWith("/") && !value.startsWith("//"))) {
+            return true;
+        }
+        try {
+            URI uri = new URI(value);
+            String scheme = uri.getScheme();
+            return scheme != null && Set.of("http", "https", "mailto").contains(scheme.toLowerCase(Locale.ROOT));
+        } catch (URISyntaxException exception) {
+            return false;
         }
     }
 
@@ -81,5 +162,12 @@ public class DocumentContentAbility {
     private static class MermaidStats {
         private int count;
         private boolean oversized;
+        private int nodeCount;
+    }
+
+    private static class ValidationFailure extends RuntimeException {
+        private ValidationFailure(String message) {
+            super(message);
+        }
     }
 }

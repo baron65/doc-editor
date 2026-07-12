@@ -35,9 +35,15 @@ public class DocumentTreeVO {
 
     public static class TreeNodeVO {
         private String id;
+        private String nodeId;
         private String parentId;
         private String nodeType;
         private String title;
+        private String name;
+        private String draftTitle;
+        private String publishedTitle;
+        private String publishState;
+        private String publishedRevision;
         private Integer sortOrder;
         private Boolean published;
         private List<TreeNodeVO> children = new ArrayList<>();
@@ -48,6 +54,14 @@ public class DocumentTreeVO {
 
         public void setId(String id) {
             this.id = id;
+        }
+
+        public String getNodeId() {
+            return nodeId;
+        }
+
+        public void setNodeId(String nodeId) {
+            this.nodeId = nodeId;
         }
 
         public String getParentId() {
@@ -72,6 +86,46 @@ public class DocumentTreeVO {
 
         public void setTitle(String title) {
             this.title = title;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getDraftTitle() {
+            return draftTitle;
+        }
+
+        public void setDraftTitle(String draftTitle) {
+            this.draftTitle = draftTitle;
+        }
+
+        public String getPublishedTitle() {
+            return publishedTitle;
+        }
+
+        public void setPublishedTitle(String publishedTitle) {
+            this.publishedTitle = publishedTitle;
+        }
+
+        public String getPublishState() {
+            return publishState;
+        }
+
+        public void setPublishState(String publishState) {
+            this.publishState = publishState;
+        }
+
+        public String getPublishedRevision() {
+            return publishedRevision;
+        }
+
+        public void setPublishedRevision(String publishedRevision) {
+            this.publishedRevision = publishedRevision;
         }
 
         public Integer getSortOrder() {
@@ -99,4 +153,3 @@ public class DocumentTreeVO {
         }
     }
 }
-

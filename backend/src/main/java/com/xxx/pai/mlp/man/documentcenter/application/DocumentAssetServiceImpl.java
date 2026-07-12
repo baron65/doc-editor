@@ -14,6 +14,8 @@ import com.xxx.pai.mlp.man.documentcenter.infra.storage.ObjectStream;
 import com.xxx.pai.mlp.man.documentcenter.infra.storage.StoredObject;
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentIdGenerator;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.UUID;
@@ -53,13 +55,17 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
     public DocumentAssetVO upload(DocumentAssetDTO dto, MultipartFile file) throws IOException {
         String assetKind = normalizeAssetKind(dto.getAssetKind());
         if (!documentAssetAbility.isAllowedSize(assetKind, file.getSize())) {
-            throw new DocumentBusinessException(DocumentErrorCode.VALIDATION_FAILED, "asset file is too large");
+            throw new DocumentBusinessException(DocumentErrorCode.FILE_TOO_LARGE, "asset file is too large");
         }
-        Long assetId = documentIdGenerator.nextId();
-        String storageKey = "documents/" + dto.getDocumentId() + "/assets/" + assetId + "/" + UUID.randomUUID();
+        String originalName = resolveOriginalName(file);
         String contentType = StringUtils.hasText(file.getContentType())
                 ? file.getContentType()
                 : "application/octet-stream";
+        if (!documentAssetAbility.isAllowedType(assetKind, originalName, contentType, readSignature(file))) {
+            throw new DocumentBusinessException(DocumentErrorCode.UNSUPPORTED_FILE_TYPE, "unsupported file extension, mime type or signature");
+        }
+        Long assetId = documentIdGenerator.nextId();
+        String storageKey = "documents/" + dto.getDocumentId() + "/assets/" + assetId + "/" + UUID.randomUUID();
         StoredObject storedObject = objectStorage.put(
                 storageKey,
                 file.getInputStream(),
@@ -73,7 +79,7 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         assetPO.setAssetKind(assetKind);
         assetPO.setStatus(ASSET_STATUS_READY);
         assetPO.setStorageKey(storedObject.getStorageKey());
-        assetPO.setOriginalName(resolveOriginalName(file));
+        assetPO.setOriginalName(originalName);
         assetPO.setFileExtension(resolveFileExtension(assetPO.getOriginalName()));
         assetPO.setMimeType(contentType);
         assetPO.setSizeBytes(storedObject.getSizeBytes());
@@ -105,7 +111,7 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         DocumentAssetPO asset = requireAsset(documentId, assetId);
         int publishedRefCount = documentAssetRefMapper.countByDocumentAssetScope(documentId, assetId, REF_SCOPE_PUBLISHED);
         if (publishedRefCount <= 0) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "published asset does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.ASSET_NOT_FOUND, "published asset does not exist");
         }
         return toAssetVO(asset, "/api/v1/document-center/documents/" + documentId + "/assets/" + assetId);
     }
@@ -121,18 +127,18 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         DocumentAssetPO asset = requireAsset(documentId, assetId);
         int publishedRefCount = documentAssetRefMapper.countByDocumentAssetScope(documentId, assetId, REF_SCOPE_PUBLISHED);
         if (publishedRefCount <= 0) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "published asset does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.ASSET_NOT_FOUND, "published asset does not exist");
         }
         return openAsset(asset);
     }
 
     private String normalizeAssetKind(String assetKind) {
         if (!StringUtils.hasText(assetKind)) {
-            throw new DocumentBusinessException(DocumentErrorCode.VALIDATION_FAILED, "assetKind must not be blank");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_REQUEST, "assetKind must not be blank");
         }
         String normalizedAssetKind = assetKind.trim().toUpperCase(Locale.ROOT);
         if (!ASSET_KIND_IMAGE.equals(normalizedAssetKind) && !ASSET_KIND_ATTACHMENT.equals(normalizedAssetKind)) {
-            throw new DocumentBusinessException(DocumentErrorCode.VALIDATION_FAILED, "unsupported assetKind");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_REQUEST, "unsupported assetKind");
         }
         return normalizedAssetKind;
     }
@@ -142,7 +148,7 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         if (asset == null
                 || !documentId.equals(asset.getDocumentId())
                 || !ASSET_STATUS_READY.equals(asset.getStatus())) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "asset does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.ASSET_NOT_FOUND, "asset does not exist");
         }
         return asset;
     }
@@ -167,6 +173,14 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
                 StringUtils.hasText(asset.getMimeType()) ? asset.getMimeType() : objectStream.getContentType(),
                 objectStream.getSizeBytes(),
                 ASSET_KIND_IMAGE.equals(asset.getAssetKind()));
+    }
+
+    private byte[] readSignature(MultipartFile file) throws IOException {
+        byte[] prefix = new byte[16];
+        try (InputStream inputStream = file.getInputStream()) {
+            int length = inputStream.read(prefix);
+            return length < 0 ? new byte[0] : Arrays.copyOf(prefix, length);
+        }
     }
 
     private String resolveOriginalName(MultipartFile file) {

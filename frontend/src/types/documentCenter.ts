@@ -6,12 +6,19 @@ export interface CommonResponse<T> {
 }
 
 export type DocumentNodeType = 'DIRECTORY' | 'DOCUMENT';
+export type DocumentPublishState = 'DRAFT' | 'PUBLISHED' | 'PUBLISHED_WITH_CHANGES';
 
 export interface DocumentTreeNode {
   id: string;
+  nodeId?: string;
   parentId: string;
   nodeType: DocumentNodeType;
   title: string;
+  name?: string;
+  draftTitle?: string;
+  publishedTitle?: string;
+  publishedRevision?: string;
+  publishState?: DocumentPublishState;
   sortOrder: number;
   published?: boolean;
   children?: DocumentTreeNode[];
@@ -38,13 +45,19 @@ export interface DocumentContent {
 
 export interface AdminDocumentDetail {
   documentId: string;
+  parentId: string;
   title: string;
+  draftTitle: string;
+  publishedTitle?: string;
+  publishState: DocumentPublishState;
   schemaVersion: number;
   content: DocumentContent;
   draftRevision: string;
   publishedRevision?: string;
   publicationVersion?: string;
   published: boolean;
+  draftUpdatedAt?: string;
+  publishedAt?: string;
 }
 
 export interface PublishedDocumentDetail {
@@ -55,6 +68,22 @@ export interface PublishedDocumentDetail {
   publishedRevision: string;
   publicationVersion: string;
   publishedAt?: string;
+  assets?: Record<string, {
+    assetId: string;
+    assetKind: 'IMAGE' | 'ATTACHMENT';
+    fileName: string;
+    mimeType: string;
+    sizeBytes: string;
+  }>;
+}
+
+export interface PublishedDocumentSearch {
+  keyword: string;
+  items: Array<{
+    documentId: string;
+    title: string;
+    breadcrumb: string[];
+  }>;
 }
 
 export interface DocumentAsset {
@@ -69,11 +98,13 @@ export interface DocumentAsset {
 
 export interface DocumentOperation {
   id?: string;
+  nodeId?: string;
+  documentId?: string;
   draftRevision?: string;
   publishedRevision?: string;
   publicationVersion?: string;
   treeRevision?: string;
-  publishState?: 'DRAFT' | 'PUBLISHED';
+  publishState?: DocumentPublishState;
   alreadyUnpublished?: boolean;
   parentId?: string;
   sortOrder?: number;

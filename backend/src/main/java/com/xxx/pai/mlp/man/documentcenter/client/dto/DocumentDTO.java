@@ -12,6 +12,7 @@ public class DocumentDTO {
     private Long parentId;
 
     private Long expectedTreeRevision;
+    private Integer targetIndex;
 
     public String getTitle() {
         return title;
@@ -36,5 +37,12 @@ public class DocumentDTO {
     public void setExpectedTreeRevision(Long expectedTreeRevision) {
         this.expectedTreeRevision = expectedTreeRevision;
     }
-}
 
+    public Integer getTargetIndex() {
+        return targetIndex;
+    }
+
+    public void setTargetIndex(Integer targetIndex) {
+        this.targetIndex = targetIndex;
+    }
+}

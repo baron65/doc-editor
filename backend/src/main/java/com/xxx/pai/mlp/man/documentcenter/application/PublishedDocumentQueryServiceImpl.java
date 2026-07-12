@@ -2,16 +2,23 @@ package com.xxx.pai.mlp.man.documentcenter.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xxx.pai.mlp.man.documentcenter.client.vo.PublishedDocumentDetailVO;
+import com.xxx.pai.mlp.man.documentcenter.client.vo.PublishedAssetVO;
+import com.xxx.pai.mlp.man.documentcenter.client.vo.PublishedDocumentSearchVO;
+import com.xxx.pai.mlp.man.documentcenter.domain.ability.DocumentNameAbility;
+import com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentAssetPO;
 import com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentNodePO;
 import com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentPO;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentNodeMapper;
+import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentAssetMapper;
+import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentAssetRefMapper;
 import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentBusinessException;
 import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentErrorCode;
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentJsonUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -31,14 +38,23 @@ public class PublishedDocumentQueryServiceImpl implements PublishedDocumentQuery
 
     private final DocumentNodeMapper documentNodeMapper;
     private final DocumentMapper documentMapper;
+    private final DocumentAssetMapper documentAssetMapper;
+    private final DocumentAssetRefMapper documentAssetRefMapper;
     private final DocumentJsonUtils documentJsonUtils;
+    private final DocumentNameAbility documentNameAbility;
 
     public PublishedDocumentQueryServiceImpl(
             DocumentNodeMapper documentNodeMapper,
             DocumentMapper documentMapper,
+            DocumentAssetMapper documentAssetMapper,
+            DocumentAssetRefMapper documentAssetRefMapper,
+            DocumentNameAbility documentNameAbility,
             DocumentJsonUtils documentJsonUtils) {
         this.documentNodeMapper = documentNodeMapper;
         this.documentMapper = documentMapper;
+        this.documentAssetMapper = documentAssetMapper;
+        this.documentAssetRefMapper = documentAssetRefMapper;
+        this.documentNameAbility = documentNameAbility;
         this.documentJsonUtils = documentJsonUtils;
     }
 
@@ -46,23 +62,24 @@ public class PublishedDocumentQueryServiceImpl implements PublishedDocumentQuery
     public PublishedDocumentDetailVO getPublishedDocument(Long documentId) {
         DocumentNodePO node = requirePublishedNode(documentId);
         DocumentPO document = requirePublishedDocument(documentId);
-        return toPublishedDetail(node, document);
+        PublishedDocumentDetailVO detail = toPublishedDetail(node, document);
+        detail.setAssets(loadPublishedAssets(documentId));
+        return detail;
     }
 
     @Override
-    public List<PublishedDocumentDetailVO> searchByTitle(String keyword, Integer limit) {
-        if (!StringUtils.hasText(keyword)) {
-            return Collections.emptyList();
+    public PublishedDocumentSearchVO searchByTitle(String keyword, Integer limit) {
+        String normalizedKeyword = documentNameAbility.normalizeNameKey(keyword);
+        if (normalizedKeyword.isEmpty() || normalizedKeyword.length() > 100) {
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_REQUEST, "search keyword length must be 1 to 100");
         }
         int effectiveLimit = Math.max(1, Math.min(limit == null ? 20 : limit, MAX_SEARCH_LIMIT));
-        List<DocumentNodePO> matchedNodes = documentNodeMapper.selectList(new LambdaQueryWrapper<DocumentNodePO>()
-                .eq(DocumentNodePO::getNodeType, NODE_TYPE_DOCUMENT)
-                .like(DocumentNodePO::getPublishedName, keyword.trim())
-                .orderByAsc(DocumentNodePO::getSortOrder)
-                .orderByAsc(DocumentNodePO::getId)
-                .last("limit " + effectiveLimit));
+        List<DocumentNodePO> matchedNodes = documentNodeMapper.searchPublishedByNameKey(
+                escapeLikePattern(normalizedKeyword), effectiveLimit);
+        PublishedDocumentSearchVO response = new PublishedDocumentSearchVO();
+        response.setKeyword(normalizedKeyword);
         if (matchedNodes.isEmpty()) {
-            return Collections.emptyList();
+            return response;
         }
 
         Map<Long, DocumentPO> publishedDocumentMap = documentMapper.selectBatchIds(
@@ -71,20 +88,28 @@ public class PublishedDocumentQueryServiceImpl implements PublishedDocumentQuery
                 .filter(document -> Integer.valueOf(1).equals(document.getIsPublished()))
                 .collect(Collectors.toMap(DocumentPO::getDocumentId, Function.identity()));
 
-        List<PublishedDocumentDetailVO> results = new ArrayList<>();
+        Map<Long, DocumentNodePO> allNodes = documentNodeMapper.selectList(new LambdaQueryWrapper<DocumentNodePO>())
+                .stream()
+                .collect(Collectors.toMap(DocumentNodePO::getId, Function.identity()));
+        List<PublishedDocumentSearchVO.SearchItemVO> results = new ArrayList<>();
         for (DocumentNodePO node : matchedNodes) {
             DocumentPO document = publishedDocumentMap.get(node.getId());
             if (document != null) {
-                results.add(toPublishedDetail(node, document));
+                PublishedDocumentSearchVO.SearchItemVO item = new PublishedDocumentSearchVO.SearchItemVO();
+                item.setDocumentId(String.valueOf(node.getId()));
+                item.setTitle(node.getPublishedName());
+                item.setBreadcrumb(buildBreadcrumb(node, allNodes));
+                results.add(item);
             }
         }
-        return results;
+        response.setItems(results);
+        return response;
     }
 
     private DocumentNodePO requirePublishedNode(Long documentId) {
         DocumentNodePO node = documentNodeMapper.selectById(documentId);
         if (node == null || !NODE_TYPE_DOCUMENT.equals(node.getNodeType()) || !StringUtils.hasText(node.getPublishedName())) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "published document does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_NOT_FOUND, "published document does not exist");
         }
         return node;
     }
@@ -92,7 +117,7 @@ public class PublishedDocumentQueryServiceImpl implements PublishedDocumentQuery
     private DocumentPO requirePublishedDocument(Long documentId) {
         DocumentPO document = documentMapper.selectById(documentId);
         if (document == null || !Integer.valueOf(1).equals(document.getIsPublished())) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "published document does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_NOT_FOUND, "published document does not exist");
         }
         return document;
     }
@@ -111,5 +136,51 @@ public class PublishedDocumentQueryServiceImpl implements PublishedDocumentQuery
                     .format(OFFSET_DATE_TIME_FORMATTER));
         }
         return detail;
+    }
+
+    private Map<String, PublishedAssetVO> loadPublishedAssets(Long documentId) {
+        List<Long> assetIds = documentAssetRefMapper.selectAssetIdsByDocumentAndScope(documentId, "PUBLISHED");
+        if (assetIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, DocumentAssetPO> assetsById = documentAssetMapper.selectBatchIds(assetIds).stream()
+                .collect(Collectors.toMap(DocumentAssetPO::getId, Function.identity()));
+        Map<String, PublishedAssetVO> assets = new LinkedHashMap<>();
+        for (Long assetId : assetIds) {
+            DocumentAssetPO asset = assetsById.get(assetId);
+            if (asset == null) {
+                continue;
+            }
+            PublishedAssetVO item = new PublishedAssetVO();
+            item.setAssetId(String.valueOf(asset.getId()));
+            item.setAssetKind(asset.getAssetKind());
+            item.setFileName(asset.getOriginalName());
+            item.setMimeType(asset.getMimeType());
+            item.setSizeBytes(String.valueOf(asset.getSizeBytes()));
+            assets.put(item.getAssetId(), item);
+        }
+        return assets;
+    }
+
+    private List<String> buildBreadcrumb(DocumentNodePO node, Map<Long, DocumentNodePO> allNodes) {
+        List<String> breadcrumb = new ArrayList<>();
+        Long parentId = node.getParentId();
+        while (parentId != null && parentId > 0) {
+            DocumentNodePO parent = allNodes.get(parentId);
+            if (parent == null) {
+                break;
+            }
+            breadcrumb.add(0, StringUtils.hasText(parent.getPublishedName())
+                    ? parent.getPublishedName()
+                    : parent.getDraftName());
+            parentId = parent.getParentId();
+        }
+        return breadcrumb;
+    }
+
+    private String escapeLikePattern(String value) {
+        return value.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 }

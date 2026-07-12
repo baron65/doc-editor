@@ -32,6 +32,9 @@ importers:
       '@umijs/max':
         specifier: 4.5.3
         version: 4.5.3(@babel/core@7.29.7)(@types/node@18.19.39)(@types/react-dom@18.2.22)(@types/react@18.2.66)(@types/webpack@5.28.5(lightningcss@1.22.1)(postcss@8.4.49))(@utoo/pack@0.0.1-alpha.73(@types/webpack@5.28.5(lightningcss@1.22.1)(postcss@8.4.49))(webpack@5.108.4(lightningcss@1.22.1)(postcss@8.4.49)))(dva@2.5.0-beta.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(lightningcss@1.22.1)(prettier@3.9.4)(rc-field-form@1.38.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(rollup@3.30.0)(sass@1.54.0)(terser@5.48.0)(type-fest@0.20.2)(typescript@4.9.5)(webpack@5.108.4(lightningcss@1.22.1)(postcss@8.4.49))
+      highlight.js:
+        specifier: 11.11.1
+        version: 11.11.1
       mermaid:
         specifier: 10.7.0
         version: 10.7.0
@@ -3584,6 +3587,10 @@ packages:
   he@1.2.0:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
+
+  highlight.js@11.11.1:
+    resolution: {integrity: sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==}
+    engines: {node: '>=12.0.0'}
 
   history@4.10.1:
     resolution: {integrity: sha512-36nwAD620w12kuzPAsyINPWJqlNbij+hpK1k9XRloDtym8mxzGYl2c17LnV6IAGB2Dmg4tEa7G7DlawS0+qjew==}
@@ -11191,6 +11198,8 @@ snapshots:
       function-bind: 1.1.2
 
   he@1.2.0: {}
+
+  highlight.js@11.11.1: {}
 
   history@4.10.1:
     dependencies:

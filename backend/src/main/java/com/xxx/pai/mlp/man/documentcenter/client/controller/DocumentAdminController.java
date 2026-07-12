@@ -26,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/v1/document-center/admin")
@@ -50,11 +52,13 @@ public class DocumentAdminController {
     }
 
     @PostMapping("/directories")
+    @ResponseStatus(HttpStatus.CREATED)
     public CommonResponse<DocumentOperationVO> createDirectory(@Valid @RequestBody DirectoryDTO dto) {
         return CommonResponse.success(documentTreeService.createDirectory(dto));
     }
 
     @PostMapping("/documents")
+    @ResponseStatus(HttpStatus.CREATED)
     public CommonResponse<DocumentOperationVO> createDocument(@Valid @RequestBody DocumentDTO dto) {
         return CommonResponse.success(documentTreeService.createDocument(dto));
     }

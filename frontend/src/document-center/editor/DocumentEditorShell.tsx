@@ -9,12 +9,18 @@ import {
   unpublishDocument,
   uploadDocumentAsset,
 } from '@/services/documentCenter';
-import type { AdminDocumentDetail, DocumentContent } from '@/types/documentCenter';
+import type { AdminDocumentDetail, DocumentContent, DocumentPublishState } from '@/types/documentCenter';
 import { DraftSaveCoordinator } from './DraftSaveCoordinator';
 import { createDocumentExtensions } from './documentExtensions';
+import { getPublishActionPresentation } from './editorPublishState';
+import { CALLOUT_KIND_OPTIONS } from './editorContextActions';
+import type { CalloutKind } from '../callout/CalloutExtension';
+import { isDocumentApiError } from '@/services/documentApiError';
+import { validateUploadFile } from './uploadValidation';
 
 interface DocumentEditorShellProps {
   document?: AdminDocumentDetail;
+  onPendingChange?: (pending: boolean) => void;
 }
 
 interface DraftSnapshot {
@@ -24,9 +30,10 @@ interface DraftSnapshot {
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'failed' | 'conflict';
 
-export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
+export function DocumentEditorShell({ document, onPendingChange }: DocumentEditorShellProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const imageActionRef = useRef<'insert' | 'replace'>('insert');
   const draftRevisionRef = useRef('0');
   const dirtyRef = useRef(false);
   const hydratingRef = useRef(false);
@@ -37,6 +44,7 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
   const [publishedRevision, setPublishedRevision] = useState<string>();
   const [publicationVersion, setPublicationVersion] = useState<string>();
   const [published, setPublished] = useState(false);
+  const [publishState, setPublishState] = useState<DocumentPublishState>('DRAFT');
   const [status, setStatus] = useState('当前为 Tiptap 编辑器基线，可继续扩展图片、附件和 Mermaid 节点。');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [dirty, setDirty] = useState(false);
@@ -74,11 +82,12 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
         if (operation.publicationVersion) {
           setPublicationVersion(operation.publicationVersion);
         }
+        setPublishState((current) => current === 'DRAFT' ? 'DRAFT' : 'PUBLISHED_WITH_CHANGES');
         setSaveState('saved');
         setStatus('草稿已自动保存。');
       } catch (error) {
         const message = error instanceof Error ? error.message : '草稿保存失败。';
-        const isConflict = message.toLocaleLowerCase().includes('conflict');
+        const isConflict = isDocumentApiError(error, 'DOCUMENT_VERSION_CONFLICT');
         conflictRef.current = isConflict;
         setSaveState(isConflict ? 'conflict' : 'failed');
         setStatus(isConflict ? '检测到编辑冲突，已停止自动保存。请复制当前内容并刷新后合并。' : message);
@@ -122,6 +131,7 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
     setPublishedRevision(document.publishedRevision);
     setPublicationVersion(document.publicationVersion);
     setPublished(document.published);
+    setPublishState(document.publishState);
     setDirty(false);
     setSaveState('saved');
     setStatus(document.published ? '线上稿已发布，可继续编辑草稿。' : '当前为草稿态。');
@@ -153,6 +163,13 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
     return () => window.removeEventListener('beforeunload', warnBeforeUnload);
   }, [saveCoordinator]);
 
+  useEffect(() => {
+    const pending = dirty || saveState === 'dirty' || saveState === 'saving'
+      || saveState === 'failed' || saveState === 'conflict';
+    onPendingChange?.(pending);
+    return () => onPendingChange?.(false);
+  }, [dirty, onPendingChange, saveState]);
+
   if (!document) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
@@ -174,6 +191,8 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
       setBusy(false);
     }
   };
+
+  const publishAction = getPublishActionPresentation(publishState);
 
   const validateAndFlushDraft = async () => {
     const validation = await validateMermaidSyntax(content);
@@ -226,6 +245,7 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
         setPublicationVersion(operation.publicationVersion);
       }
       setPublished(true);
+      setPublishState('PUBLISHED');
       setStatus(`文档已发布，publicationVersion 已更新为 ${operation.publicationVersion ?? publicationVersion}。`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '文档发布失败。');
@@ -245,6 +265,7 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
         setPublicationVersion(operation.publicationVersion);
       }
       setPublished(false);
+      setPublishState('DRAFT');
       setStatus(
         operation.alreadyUnpublished
           ? '文档已是草稿态，无需重复下架。'
@@ -279,24 +300,51 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
     if (!file || !editor) {
       return;
     }
+    const validationError = validateUploadFile('IMAGE', file);
+    if (validationError) {
+      setStatus(validationError);
+      imageActionRef.current = 'insert';
+      return;
+    }
     setBusy(true);
     try {
       const asset = await uploadDocumentAsset(document.documentId, 'IMAGE', file);
-      editor
-        .chain()
-        .focus()
-        .setImage({
+      if (imageActionRef.current === 'replace' && editor.isActive('image')) {
+        editor.chain().focus().updateAttributes('image', {
           src: asset.accessUrl,
-          alt: asset.originalName,
+          assetId: asset.assetId,
           title: asset.originalName,
-        })
-        .updateAttributes('image', { assetId: asset.assetId })
-        .run();
-      setStatus('图片已上传并插入编辑器，保存草稿后会建立 DRAFT 引用。');
+        }).run();
+        setStatus('图片已替换，自动保存后会更新草稿资源引用。');
+      } else {
+        editor
+          .chain()
+          .focus()
+          .setImage({
+            src: asset.accessUrl,
+            alt: asset.originalName,
+            title: asset.originalName,
+          })
+          .updateAttributes('image', { assetId: asset.assetId })
+          .run();
+        setStatus('图片已上传并插入编辑器，保存草稿后会建立 DRAFT 引用。');
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '图片上传失败。');
     } finally {
+      imageActionRef.current = 'insert';
       setBusy(false);
+    }
+  };
+
+  const editImageAttribute = (attribute: 'alt' | 'caption', promptText: string) => {
+    if (!editor?.isActive('image')) {
+      return;
+    }
+    const current = editor.getAttributes('image')[attribute] as string | undefined;
+    const next = window.prompt(promptText, current ?? '');
+    if (next !== null) {
+      editor.chain().focus().updateAttributes('image', { [attribute]: next.trim() || null }).run();
     }
   };
 
@@ -304,6 +352,11 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || !editor) {
+      return;
+    }
+    const validationError = validateUploadFile('ATTACHMENT', file);
+    if (validationError) {
+      setStatus(validationError);
       return;
     }
     setBusy(true);
@@ -365,10 +418,18 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
             <span
               className={[
                 'rounded-full px-3 py-1 text-xs font-medium',
-                published ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700',
+                publishState === 'PUBLISHED'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : publishState === 'PUBLISHED_WITH_CHANGES'
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-gray-100 text-gray-600',
               ].join(' ')}
             >
-              {published ? (publishedRevision === draftRevision ? '已发布' : '已发布 · 有待发布更新') : '草稿'}
+              {publishState === 'PUBLISHED'
+                ? '已发布'
+                : publishState === 'PUBLISHED_WITH_CHANGES'
+                  ? '已发布 · 有待发布更新'
+                  : '草稿'}
             </span>
             <button
               className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
@@ -389,10 +450,10 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
             <button
               className="rounded-md bg-brand-500 px-3 py-2 text-sm text-white disabled:opacity-50"
               type="button"
-              disabled={busy}
+              disabled={busy || !publishAction.enabled}
               onClick={handlePublish}
             >
-              {published ? '发布更新' : '发布'}
+              {publishAction.label}
             </button>
             <button
               className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
@@ -446,15 +507,52 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
           <ToolbarButton disabled={busy} onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
             表格
           </ToolbarButton>
-          <ToolbarButton disabled={busy} onClick={() => editor?.chain().focus().setCallout('info').run()}>
-            提示块
-          </ToolbarButton>
+          {editor?.isActive('table') ? (
+            <>
+              <ToolbarButton disabled={busy} onClick={() => editor.chain().focus().addColumnAfter().run()}>后插入列</ToolbarButton>
+              <ToolbarButton disabled={busy} onClick={() => editor.chain().focus().deleteColumn().run()}>删除列</ToolbarButton>
+              <ToolbarButton disabled={busy} onClick={() => editor.chain().focus().addRowAfter().run()}>后插入行</ToolbarButton>
+              <ToolbarButton disabled={busy} onClick={() => editor.chain().focus().deleteRow().run()}>删除行</ToolbarButton>
+              <ToolbarButton disabled={busy} onClick={() => editor.chain().focus().deleteTable().run()}>删除表格</ToolbarButton>
+            </>
+          ) : null}
+          <select
+            aria-label="提示块类型"
+            className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 disabled:opacity-40"
+            disabled={busy}
+            value={(editor?.isActive('callout') ? editor.getAttributes('callout').kind : 'info') as CalloutKind}
+            onChange={(event) => {
+              const kind = event.target.value as CalloutKind;
+              if (editor?.isActive('callout')) {
+                editor.chain().focus().updateAttributes('callout', { kind }).run();
+              } else {
+                editor?.chain().focus().setCallout(kind).run();
+              }
+            }}
+          >
+            {CALLOUT_KIND_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
           <ToolbarButton active={editor?.isActive('link')} disabled={busy} onClick={setLink}>
             链接
           </ToolbarButton>
-          <ToolbarButton disabled={busy} onClick={() => imageInputRef.current?.click()}>
+          <ToolbarButton disabled={busy} onClick={() => {
+            imageActionRef.current = 'insert';
+            imageInputRef.current?.click();
+          }}>
             图片
           </ToolbarButton>
+          {editor?.isActive('image') ? (
+            <>
+              <ToolbarButton disabled={busy} onClick={() => {
+                imageActionRef.current = 'replace';
+                imageInputRef.current?.click();
+              }}>替换图片</ToolbarButton>
+              <ToolbarButton disabled={busy} onClick={() => editImageAttribute('alt', '请输入图片替代文本')}>替代文本</ToolbarButton>
+              <ToolbarButton disabled={busy} onClick={() => editImageAttribute('caption', '请输入图片说明')}>图片说明</ToolbarButton>
+            </>
+          ) : null}
           <ToolbarButton disabled={busy} onClick={() => attachmentInputRef.current?.click()}>
             附件
           </ToolbarButton>
@@ -465,13 +563,14 @@ export function DocumentEditorShell({ document }: DocumentEditorShellProps) {
             ref={imageInputRef}
             className="hidden"
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             onChange={handleImageSelected}
           />
           <input
             ref={attachmentInputRef}
             className="hidden"
             type="file"
+            accept=".pdf,.txt,.md,.csv,.docx,.xlsx,.pptx,.zip"
             onChange={handleAttachmentSelected}
           />
         </div>

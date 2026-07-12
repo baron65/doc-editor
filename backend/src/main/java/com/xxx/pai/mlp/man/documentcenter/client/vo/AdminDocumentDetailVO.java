@@ -5,13 +5,19 @@ import java.util.Map;
 public class AdminDocumentDetailVO {
 
     private String documentId;
+    private String parentId;
     private String title;
+    private String draftTitle;
+    private String publishedTitle;
+    private String publishState;
     private Integer schemaVersion;
     private Map<String, Object> content;
     private String draftRevision;
     private String publishedRevision;
     private String publicationVersion;
     private Boolean published;
+    private String draftUpdatedAt;
+    private String publishedAt;
 
     public String getDocumentId() {
         return documentId;
@@ -21,12 +27,44 @@ public class AdminDocumentDetailVO {
         this.documentId = documentId;
     }
 
+    public String getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(String parentId) {
+        this.parentId = parentId;
+    }
+
     public String getTitle() {
         return title;
     }
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getDraftTitle() {
+        return draftTitle;
+    }
+
+    public void setDraftTitle(String draftTitle) {
+        this.draftTitle = draftTitle;
+    }
+
+    public String getPublishedTitle() {
+        return publishedTitle;
+    }
+
+    public void setPublishedTitle(String publishedTitle) {
+        this.publishedTitle = publishedTitle;
+    }
+
+    public String getPublishState() {
+        return publishState;
+    }
+
+    public void setPublishState(String publishState) {
+        this.publishState = publishState;
     }
 
     public Integer getSchemaVersion() {
@@ -76,5 +114,20 @@ public class AdminDocumentDetailVO {
     public void setPublished(Boolean published) {
         this.published = published;
     }
-}
 
+    public String getDraftUpdatedAt() {
+        return draftUpdatedAt;
+    }
+
+    public void setDraftUpdatedAt(String draftUpdatedAt) {
+        this.draftUpdatedAt = draftUpdatedAt;
+    }
+
+    public String getPublishedAt() {
+        return publishedAt;
+    }
+
+    public void setPublishedAt(String publishedAt) {
+        this.publishedAt = publishedAt;
+    }
+}

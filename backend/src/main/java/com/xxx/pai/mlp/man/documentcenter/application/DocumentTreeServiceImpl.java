@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -129,10 +130,12 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         node.setUpdatedBy(SYSTEM_USER_ID);
         node.setUpdatedAt(now);
         documentNodeMapper.insert(node);
+        reorderNewNode(node, dto.getTargetIndex(), now);
 
         long newTreeRevision = bumpTreeRevision(treeMeta);
         DocumentOperationVO operation = DocumentOperationVO.empty();
         operation.setId(String.valueOf(nodeId));
+        operation.setNodeId(String.valueOf(nodeId));
         operation.setTreeRevision(String.valueOf(newTreeRevision));
         return operation;
     }
@@ -165,6 +168,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         node.setUpdatedBy(SYSTEM_USER_ID);
         node.setUpdatedAt(now);
         documentNodeMapper.insert(node);
+        reorderNewNode(node, dto.getTargetIndex(), now);
 
         DocumentPO document = new DocumentPO();
         document.setDocumentId(documentId);
@@ -185,6 +189,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         long newTreeRevision = bumpTreeRevision(treeMeta);
         DocumentOperationVO operation = DocumentOperationVO.empty();
         operation.setId(String.valueOf(documentId));
+        operation.setDocumentId(String.valueOf(documentId));
         operation.setDraftRevision(String.valueOf(document.getDraftRevision()));
         operation.setTreeRevision(String.valueOf(newTreeRevision));
         return operation;
@@ -273,18 +278,18 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
             long childCount = documentNodeMapper.selectCount(new LambdaQueryWrapper<DocumentNodePO>()
                     .eq(DocumentNodePO::getParentId, nodeId));
             if (childCount > 0) {
-                throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "directory is not empty");
+                throw new DocumentBusinessException(DocumentErrorCode.DIRECTORY_NOT_EMPTY, "directory is not empty");
             }
             documentNodeMapper.deleteById(nodeId);
         } else if (NODE_TYPE_DOCUMENT.equals(node.getNodeType())) {
             DocumentPO document = documentMapper.selectById(nodeId);
             if (document != null && Integer.valueOf(1).equals(document.getIsPublished())) {
-                throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "published document cannot be deleted");
+                throw new DocumentBusinessException(DocumentErrorCode.PUBLISHED_DOCUMENT_CANNOT_DELETE, "published document cannot be deleted");
             }
             documentMapper.deleteById(nodeId);
             documentNodeMapper.deleteById(nodeId);
         } else {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "unsupported node type");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_REQUEST, "unsupported node type");
         }
 
         long newTreeRevision = bumpTreeRevision(treeMeta);
@@ -347,20 +352,31 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         for (DocumentNodePO node : nodes) {
             DocumentTreeVO.TreeNodeVO treeNode = new DocumentTreeVO.TreeNodeVO();
             treeNode.setId(String.valueOf(node.getId()));
+            treeNode.setNodeId(String.valueOf(node.getId()));
             treeNode.setParentId(String.valueOf(node.getParentId()));
             treeNode.setNodeType(node.getNodeType());
             treeNode.setSortOrder(node.getSortOrder());
 
             if (NODE_TYPE_DIRECTORY.equals(node.getNodeType())) {
-                treeNode.setTitle(resolveDirectoryTitle(node, publishedOnly));
+                String directoryName = resolveDirectoryTitle(node, publishedOnly);
+                treeNode.setTitle(directoryName);
+                treeNode.setName(directoryName);
                 treeNode.setPublished(true);
             } else {
                 DocumentPO document = documentMap.get(node.getId());
                 if (publishedOnly && document == null) {
                     continue;
                 }
-                treeNode.setTitle(resolveDocumentTitle(node, publishedOnly));
-                treeNode.setPublished(document != null && Integer.valueOf(1).equals(document.getIsPublished()));
+                String visibleTitle = resolveDocumentTitle(node, publishedOnly);
+                boolean published = document != null && Integer.valueOf(1).equals(document.getIsPublished());
+                treeNode.setTitle(visibleTitle);
+                treeNode.setDraftTitle(node.getDraftName());
+                treeNode.setPublishedTitle(node.getPublishedName());
+                treeNode.setPublished(published);
+                treeNode.setPublishState(resolvePublishState(node, document));
+                treeNode.setPublishedRevision(document == null || document.getPublishedRevision() == null
+                        ? null
+                        : String.valueOf(document.getPublishedRevision()));
             }
             nodeVoMap.put(node.getId(), treeNode);
         }
@@ -406,6 +422,15 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         return node.getDraftName();
     }
 
+    private String resolvePublishState(DocumentNodePO node, DocumentPO document) {
+        if (document == null || !Integer.valueOf(1).equals(document.getIsPublished())) {
+            return "DRAFT";
+        }
+        boolean sameRevision = Objects.equals(document.getDraftRevision(), document.getPublishedRevision());
+        boolean sameTitle = Objects.equals(node.getDraftName(), node.getPublishedName());
+        return sameRevision && sameTitle ? "PUBLISHED" : "PUBLISHED_WITH_CHANGES";
+    }
+
     private String findFirstDocumentId(List<DocumentTreeVO.TreeNodeVO> nodes) {
         for (DocumentTreeVO.TreeNodeVO node : nodes) {
             if (NODE_TYPE_DOCUMENT.equals(node.getNodeType())) {
@@ -425,10 +450,10 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         }
         DocumentNodePO parentNode = documentNodeMapper.selectById(parentId);
         if (parentNode == null) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "parent directory does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_NOT_FOUND, "parent directory does not exist");
         }
         if (!NODE_TYPE_DIRECTORY.equals(parentNode.getNodeType())) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "parent node must be a directory");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_MOVE_TARGET, "parent node must be a directory");
         }
         return parentNode;
     }
@@ -436,7 +461,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
     private DocumentNodePO requireDirectoryNode(Long directoryId) {
         DocumentNodePO node = requireNode(directoryId);
         if (!NODE_TYPE_DIRECTORY.equals(node.getNodeType())) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "node must be a directory");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_REQUEST, "node must be a directory");
         }
         return node;
     }
@@ -444,7 +469,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
     private DocumentNodePO requireNode(Long nodeId) {
         DocumentNodePO node = documentNodeMapper.selectById(nodeId);
         if (node == null) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "node does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_NOT_FOUND, "node does not exist");
         }
         return node;
     }
@@ -452,26 +477,26 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
     private void assertNewDirectoryDepthAllowed(DocumentNodePO parentNode) {
         int newDirectoryDepth = parentNode == null ? 1 : calculateDepth(parentNode.getId()) + 1;
         if (!documentTreeAbility.isValidDepth(newDirectoryDepth)) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "directory depth exceeds maximum");
+            throw new DocumentBusinessException(DocumentErrorCode.DIRECTORY_DEPTH_EXCEEDED, "directory depth exceeds maximum");
         }
     }
 
     private void assertDocumentParentDepthAllowed(DocumentNodePO parentNode) {
         int parentDirectoryDepth = parentNode == null ? 0 : calculateDepth(parentNode.getId());
         if (!documentTreeAbility.isValidDepth(parentDirectoryDepth)) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "document parent depth exceeds maximum");
+            throw new DocumentBusinessException(DocumentErrorCode.DIRECTORY_DEPTH_EXCEEDED, "document parent depth exceeds maximum");
         }
     }
 
     private void validateMoveTarget(DocumentNodePO node, DocumentNodePO targetParentNode, Long targetParentId) {
         if (NODE_TYPE_DIRECTORY.equals(node.getNodeType()) && isSelfOrDescendant(node.getId(), targetParentId)) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "directory cannot move to itself or descendant");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_MOVE_TARGET, "directory cannot move to itself or descendant");
         }
         if (NODE_TYPE_DIRECTORY.equals(node.getNodeType())) {
             int targetParentDepth = targetParentNode == null ? 0 : calculateDepth(targetParentNode.getId());
             int movedSubtreeMaxDepth = targetParentDepth + calculateDirectorySubtreeRelativeDepth(node.getId());
             if (!documentTreeAbility.isValidDepth(movedSubtreeMaxDepth)) {
-                throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "directory depth exceeds maximum");
+                throw new DocumentBusinessException(DocumentErrorCode.DIRECTORY_DEPTH_EXCEEDED, "directory depth exceeds maximum");
             }
             return;
         }
@@ -479,7 +504,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
             assertDocumentParentDepthAllowed(targetParentNode);
             return;
         }
-        throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "unsupported node type");
+        throw new DocumentBusinessException(DocumentErrorCode.INVALID_REQUEST, "unsupported node type");
     }
 
     private boolean isSelfOrDescendant(Long sourceNodeId, Long candidateParentId) {
@@ -544,6 +569,16 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         siblings.add(index, node);
     }
 
+    private void reorderNewNode(DocumentNodePO node, Integer targetIndex, LocalDateTime now) {
+        if (targetIndex == null) {
+            return;
+        }
+        List<DocumentNodePO> siblings = listSiblings(node.getParentId());
+        siblings.removeIf(sibling -> sibling.getId().equals(node.getId()));
+        insertAtTargetIndex(siblings, node, targetIndex);
+        normalizeSiblingSortOrders(siblings, node.getParentId(), now);
+    }
+
     private void normalizeSiblingSortOrders(List<DocumentNodePO> siblings, Long parentId, LocalDateTime now) {
         for (int index = 0; index < siblings.size(); index++) {
             DocumentNodePO sibling = siblings.get(index);
@@ -570,7 +605,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
     private String normalizeRequiredName(String name) {
         String normalized = documentNameAbility.normalizeNameKey(name);
         if (!StringUtils.hasText(normalized)) {
-            throw new DocumentBusinessException(DocumentErrorCode.VALIDATION_FAILED, "name must not be blank");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_NODE_NAME, "name must not be blank");
         }
         return normalized;
     }
@@ -583,7 +618,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
             queryWrapper.ne(DocumentNodePO::getId, excludeNodeId);
         }
         if (documentNodeMapper.selectCount(queryWrapper) > 0) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "duplicate draft name under the same parent");
+            throw new DocumentBusinessException(DocumentErrorCode.DUPLICATE_DRAFT_NAME, "duplicate draft name under the same parent");
         }
     }
 
@@ -595,7 +630,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
             queryWrapper.ne(DocumentNodePO::getId, excludeNodeId);
         }
         if (documentNodeMapper.selectCount(queryWrapper) > 0) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "duplicate published name under the same parent");
+            throw new DocumentBusinessException(DocumentErrorCode.DUPLICATE_PUBLISHED_NAME, "duplicate published name under the same parent");
         }
     }
 

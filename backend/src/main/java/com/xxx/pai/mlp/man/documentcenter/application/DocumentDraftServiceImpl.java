@@ -21,7 +21,10 @@ import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentContentAssetExtract
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentJsonUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,9 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
     private static final String ASSET_STATUS_READY = "READY";
     private static final String REF_SCOPE_DRAFT = "DRAFT";
     private static final long SYSTEM_USER_ID = 0L;
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter OFFSET_DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
     private final DocumentNodeMapper documentNodeMapper;
     private final DocumentMapper documentMapper;
@@ -71,7 +77,10 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
 
         AdminDocumentDetailVO detail = new AdminDocumentDetailVO();
         detail.setDocumentId(String.valueOf(documentId));
+        detail.setParentId(String.valueOf(node.getParentId()));
         detail.setTitle(node.getDraftName());
+        detail.setDraftTitle(node.getDraftName());
+        detail.setPublishedTitle(node.getPublishedName());
         detail.setSchemaVersion(document.getDraftSchemaVersion());
         detail.setContent(documentJsonUtils.fromJson(document.getDraftContentJson()));
         detail.setDraftRevision(String.valueOf(document.getDraftRevision()));
@@ -79,8 +88,25 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
                 ? null
                 : String.valueOf(document.getPublishedRevision()));
         detail.setPublicationVersion(String.valueOf(document.getPublicationVersion()));
-        detail.setPublished(Integer.valueOf(1).equals(document.getIsPublished()));
+        boolean published = Integer.valueOf(1).equals(document.getIsPublished());
+        detail.setPublished(published);
+        detail.setPublishState(resolvePublishState(node, document));
+        detail.setDraftUpdatedAt(formatDateTime(document.getDraftUpdatedAt()));
+        detail.setPublishedAt(formatDateTime(document.getPublishedAt()));
         return detail;
+    }
+
+    private String resolvePublishState(DocumentNodePO node, DocumentPO document) {
+        if (!Integer.valueOf(1).equals(document.getIsPublished())) {
+            return "DRAFT";
+        }
+        boolean sameRevision = Objects.equals(document.getDraftRevision(), document.getPublishedRevision());
+        boolean sameTitle = Objects.equals(node.getDraftName(), node.getPublishedName());
+        return sameRevision && sameTitle ? "PUBLISHED" : "PUBLISHED_WITH_CHANGES";
+    }
+
+    private String formatDateTime(LocalDateTime value) {
+        return value == null ? null : value.atZone(BUSINESS_ZONE).format(OFFSET_DATE_TIME_FORMATTER);
     }
 
     @Override
@@ -98,7 +124,11 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
         ContentValidationResultBO validationResult =
                 documentContentAbility.validateDraftContent(dto.getSchemaVersion(), contentJson);
         if (!validationResult.isValid()) {
-            throw new DocumentBusinessException(DocumentErrorCode.VALIDATION_FAILED, validationResult.getReason());
+            throw new DocumentBusinessException(
+                    validationResult.isTooLarge()
+                            ? DocumentErrorCode.CONTENT_TOO_LARGE
+                            : DocumentErrorCode.CONTENT_SCHEMA_INVALID,
+                    validationResult.getReason());
         }
         Set<Long> draftAssetIds = documentContentAssetExtractor.extractAssetIds(dto.getContent());
         ensureDraftAssetsReady(documentId, draftAssetIds);
@@ -137,7 +167,7 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
     private DocumentNodePO requireDocumentNode(Long documentId) {
         DocumentNodePO node = documentNodeMapper.selectById(documentId);
         if (node == null || !NODE_TYPE_DOCUMENT.equals(node.getNodeType())) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "document does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_NOT_FOUND, "document does not exist");
         }
         return node;
     }
@@ -145,7 +175,7 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
     private DocumentPO requireDocument(Long documentId) {
         DocumentPO document = documentMapper.selectById(documentId);
         if (document == null) {
-            throw new DocumentBusinessException(DocumentErrorCode.NOT_FOUND, "document content does not exist");
+            throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_NOT_FOUND, "document content does not exist");
         }
         return document;
     }
@@ -153,7 +183,7 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
     private String normalizeRequiredTitle(String title) {
         String normalizedTitle = documentNameAbility.normalizeNameKey(title);
         if (!StringUtils.hasText(normalizedTitle)) {
-            throw new DocumentBusinessException(DocumentErrorCode.VALIDATION_FAILED, "title must not be blank");
+            throw new DocumentBusinessException(DocumentErrorCode.INVALID_NODE_NAME, "title must not be blank");
         }
         return normalizedTitle;
     }
@@ -164,7 +194,7 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
                 .eq(DocumentNodePO::getDraftNameKey, draftNameKey)
                 .ne(DocumentNodePO::getId, excludeNodeId);
         if (documentNodeMapper.selectCount(queryWrapper) > 0) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "duplicate draft name under the same parent");
+            throw new DocumentBusinessException(DocumentErrorCode.DUPLICATE_DRAFT_NAME, "duplicate draft name under the same parent");
         }
     }
 
@@ -172,7 +202,7 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
         try {
             return documentJsonUtils.toJson(dto.getContent());
         } catch (JsonProcessingException exception) {
-            throw new DocumentBusinessException(DocumentErrorCode.VALIDATION_FAILED, "draft content is not valid json");
+            throw new DocumentBusinessException(DocumentErrorCode.CONTENT_SCHEMA_INVALID, "draft content is not valid json");
         }
     }
 
@@ -185,7 +215,7 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
                 .eq(DocumentAssetPO::getStatus, ASSET_STATUS_READY)
                 .in(DocumentAssetPO::getId, draftAssetIds));
         if (readyAssetCount != draftAssetIds.size()) {
-            throw new DocumentBusinessException(DocumentErrorCode.CONFLICT, "draft references assets that are not ready");
+            throw new DocumentBusinessException(DocumentErrorCode.ASSET_NOT_READY, "draft references assets that are not ready");
         }
     }
 
