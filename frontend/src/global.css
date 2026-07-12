@@ -1,3 +1,5 @@
+@import 'highlight.js/styles/vs2015.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -81,10 +83,45 @@ body {
 .document-editor pre,
 .document-content pre {
   overflow: auto;
-  border-radius: 0.75rem;
-  background: #111827;
+  border: 1px solid #3c3c3c;
+  border-radius: 0.5rem;
+  background: #1e1e1e;
   padding: 1rem;
-  color: #f9fafb;
+  color: #d4d4d4;
+  font-family: Consolas, 'Courier New', monospace;
+}
+
+.document-content pre {
+  border: 0;
+  border-radius: 0;
+}
+
+.document-editor pre {
+  position: relative;
+  padding-top: 3rem;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 18%);
+}
+
+.document-editor pre::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  border-bottom: 1px solid #3c3c3c;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: #252526;
+  padding: 0.55rem 0.8rem;
+  color: #cccccc;
+  content: 'VS Code';
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.document-editor pre.ProseMirror-selectednode {
+  outline: 2px solid #007acc;
+  outline-offset: 2px;
 }
 
 .document-editor table {
@@ -122,9 +159,15 @@ body {
 }
 
 .document-editor .mermaid-node pre {
+  border: 0;
   background: transparent;
   padding: 0;
   color: #4b5563;
+  box-shadow: none;
+}
+
+.document-editor .mermaid-node pre::before {
+  content: none;
 }
 
 .mermaid-renderer svg {

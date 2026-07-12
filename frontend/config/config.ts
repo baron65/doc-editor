@@ -4,6 +4,12 @@ const apiProxyTarget = process.env.DOCUMENT_CENTER_API_PROXY_TARGET || 'http://l
 
 export default defineConfig({
   npmClient: 'pnpm',
+  metas: [
+    {
+      name: 'viewport',
+      content: 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no',
+    },
+  ],
   routes: [
     { path: '/', redirect: '/document-center' },
     { path: '/document-center', component: './document-center/index' },

@@ -97,7 +97,7 @@ export default function AdminDocumentDetailPage() {
 
   return (
     <main className="flex min-h-screen bg-gray-100">
-      <aside className="w-80 border-r border-gray-200 bg-white p-6">
+      <aside className="sticky top-0 h-screen w-80 shrink-0 self-start overflow-y-auto border-r border-gray-200 bg-white p-6">
         <h1 className="mb-6 text-xl font-semibold text-gray-950">文档管理</h1>
         {activeNode ? (
           <div className="mb-4 rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
@@ -146,11 +146,15 @@ export default function AdminDocumentDetailPage() {
           }}
         />
       </aside>
-      <section className="min-w-0 flex-1 p-8">
+      <section className="min-w-0 flex-1">
         {detailRequest.loading ? (
-          <div className="text-sm text-gray-500">加载中...</div>
+          <div className="p-8 text-sm text-gray-500">加载中...</div>
         ) : (
-          <DocumentEditorShell document={document} onPendingChange={setHasPendingEditorWork} />
+          <DocumentEditorShell
+            document={document}
+            onDocumentChange={treeRequest.refresh}
+            onPendingChange={setHasPendingEditorWork}
+          />
         )}
       </section>
     </main>

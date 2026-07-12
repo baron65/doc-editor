@@ -212,7 +212,7 @@ export default function AdminDocumentCenterPage() {
 
   return (
     <main className="flex min-h-screen bg-gray-100">
-      <aside className="w-80 border-r border-gray-200 bg-white p-6">
+      <aside className="sticky top-0 h-screen w-80 shrink-0 self-start overflow-y-auto border-r border-gray-200 bg-white p-6">
         <div className="mb-6">
           <div className="mb-3 flex items-center justify-between">
             <h1 className="text-xl font-semibold text-gray-950">文档管理</h1>

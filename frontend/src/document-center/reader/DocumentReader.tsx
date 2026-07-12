@@ -68,8 +68,8 @@ export function DocumentReader({ document, assetScope = 'published', previous, n
   }
 
   return (
-    <div className="flex min-w-0 items-start gap-6">
-      <article ref={articleRef} className="document-content min-w-0 flex-1 rounded-xl bg-white p-8 shadow-sm">
+    <div className="flex min-w-0 items-start gap-4 xl:gap-6">
+      <article ref={articleRef} className="document-content min-w-0 flex-1 rounded-xl bg-white p-5 shadow-sm sm:p-6 lg:p-8">
         <h1 className="mb-2 text-3xl font-semibold text-gray-950">{document.title}</h1>
         {document.publishedAt ? (
           <div className="mb-6 text-xs text-gray-400">最后发布：{formatPublishedAt(document.publishedAt)}</div>
@@ -85,7 +85,7 @@ export function DocumentReader({ document, assetScope = 'published', previous, n
         ) : null}
       </article>
       {readerContent.headings.length ? (
-        <aside className="sticky top-8 hidden w-52 shrink-0 rounded-xl bg-white p-4 text-sm shadow-sm xl:block">
+        <aside className="sticky top-0 hidden max-h-[calc(100vh-4rem)] w-52 shrink-0 overflow-y-auto rounded-xl bg-white p-4 text-sm shadow-sm xl:block">
           <div className="mb-3 font-medium text-gray-800">本页目录</div>
           <nav className="space-y-2" aria-label="页内目录">
             {readerContent.headings.map((heading) => (
@@ -191,13 +191,13 @@ function applyMarks(text: string, node: DocumentContent, key: number): ReactNode
   return (node.marks ?? []).reduce<ReactNode>((current, mark) => {
     switch (mark.type) {
       case 'bold':
-        return <strong>{current}</strong>;
+        return <strong key={key}>{current}</strong>;
       case 'italic':
-        return <em>{current}</em>;
+        return <em key={key}>{current}</em>;
       case 'underline':
-        return <u>{current}</u>;
+        return <u key={key}>{current}</u>;
       case 'code':
-        return <code>{current}</code>;
+        return <code key={key}>{current}</code>;
       case 'link': {
         const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : '#';
         if (!isSafeHref(href)) {

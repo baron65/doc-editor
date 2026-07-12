@@ -198,7 +198,7 @@ function TreeNodeItem({
           >
             {collapsed ? '▶' : '▼'}
           </button>
-        ) : <span className="w-7 shrink-0" />}
+        ) : <span className="w-3 shrink-0" />}
         <button
           type="button"
           className={[
@@ -219,7 +219,7 @@ function TreeNodeItem({
         </button>
       </div>
       {!!node.children?.length && !collapsed && (
-        <div className="ml-4 border-l border-gray-100 pl-2">
+        <div className="ml-2 border-l border-gray-100 pl-2">
           {node.children.map((child) => (
             <TreeNodeItem
               key={child.id}

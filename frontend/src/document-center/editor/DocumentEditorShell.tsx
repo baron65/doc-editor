@@ -21,6 +21,7 @@ import { validateUploadFile } from './uploadValidation';
 interface DocumentEditorShellProps {
   document?: AdminDocumentDetail;
   onPendingChange?: (pending: boolean) => void;
+  onDocumentChange?: () => unknown | Promise<unknown>;
 }
 
 interface DraftSnapshot {
@@ -30,7 +31,7 @@ interface DraftSnapshot {
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'failed' | 'conflict';
 
-export function DocumentEditorShell({ document, onPendingChange }: DocumentEditorShellProps) {
+export function DocumentEditorShell({ document, onPendingChange, onDocumentChange }: DocumentEditorShellProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const imageActionRef = useRef<'insert' | 'replace'>('insert');
@@ -38,10 +39,9 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
   const dirtyRef = useRef(false);
   const hydratingRef = useRef(false);
   const conflictRef = useRef(false);
+  const onDocumentChangeRef = useRef(onDocumentChange);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState<DocumentContent>(emptyDocumentContent);
-  const [draftRevision, setDraftRevision] = useState('0');
-  const [publishedRevision, setPublishedRevision] = useState<string>();
   const [publicationVersion, setPublicationVersion] = useState<string>();
   const [published, setPublished] = useState(false);
   const [publishState, setPublishState] = useState<DocumentPublishState>('DRAFT');
@@ -50,6 +50,14 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    onDocumentChangeRef.current = onDocumentChange;
+  }, [onDocumentChange]);
+
+  const notifyDocumentChange = () => {
+    void Promise.resolve(onDocumentChangeRef.current?.()).catch(() => undefined);
+  };
 
   const markDirty = () => {
     dirtyRef.current = true;
@@ -74,10 +82,6 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
         });
         if (operation.draftRevision) {
           draftRevisionRef.current = operation.draftRevision;
-          setDraftRevision(operation.draftRevision);
-        }
-        if (operation.publishedRevision) {
-          setPublishedRevision(operation.publishedRevision);
         }
         if (operation.publicationVersion) {
           setPublicationVersion(operation.publicationVersion);
@@ -85,6 +89,7 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
         setPublishState((current) => current === 'DRAFT' ? 'DRAFT' : 'PUBLISHED_WITH_CHANGES');
         setSaveState('saved');
         setStatus('草稿已自动保存。');
+        notifyDocumentChange();
       } catch (error) {
         const message = error instanceof Error ? error.message : '草稿保存失败。';
         const isConflict = isDocumentApiError(error, 'DOCUMENT_VERSION_CONFLICT');
@@ -126,9 +131,7 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
     dirtyRef.current = false;
     setTitle(document.title);
     setContent(nextContent);
-    setDraftRevision(document.draftRevision);
     draftRevisionRef.current = document.draftRevision;
-    setPublishedRevision(document.publishedRevision);
     setPublicationVersion(document.publicationVersion);
     setPublished(document.published);
     setPublishState(document.publishState);
@@ -169,6 +172,24 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
     onPendingChange?.(pending);
     return () => onPendingChange?.(false);
   }, [dirty, onPendingChange, saveState]);
+
+  useEffect(() => {
+    if (!previewOpen) {
+      return undefined;
+    }
+    const previousOverflow = globalThis.document.body.style.overflow;
+    globalThis.document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPreviewOpen(false);
+      }
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      globalThis.document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [previewOpen]);
 
   if (!document) {
     return (
@@ -236,17 +257,15 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
         expectedPublicationVersion: publicationVersion,
       });
       if (operation.draftRevision) {
-        setDraftRevision(operation.draftRevision);
-      }
-      if (operation.publishedRevision) {
-        setPublishedRevision(operation.publishedRevision);
+        draftRevisionRef.current = operation.draftRevision;
       }
       if (operation.publicationVersion) {
         setPublicationVersion(operation.publicationVersion);
       }
       setPublished(true);
       setPublishState('PUBLISHED');
-      setStatus(`文档已发布，publicationVersion 已更新为 ${operation.publicationVersion ?? publicationVersion}。`);
+      setStatus('文档已发布。');
+      notifyDocumentChange();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '文档发布失败。');
     } finally {
@@ -260,7 +279,6 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
       const operation = await unpublishDocument(document.documentId, {
         expectedPublicationVersion: publicationVersion ?? '0',
       });
-      setPublishedRevision(operation.publishedRevision);
       if (operation.publicationVersion) {
         setPublicationVersion(operation.publicationVersion);
       }
@@ -269,8 +287,9 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
       setStatus(
         operation.alreadyUnpublished
           ? '文档已是草稿态，无需重复下架。'
-          : `文档已下架，publicationVersion 已更新为 ${operation.publicationVersion ?? publicationVersion}。`,
+          : '文档已下架。',
       );
+      notifyDocumentChange();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '文档下架失败。');
     } finally {
@@ -407,14 +426,13 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
   };
 
   return (
-    <div className="flex min-h-[520px] flex-col rounded-xl bg-white shadow-sm">
-      <div className="border-b border-gray-100 px-6 py-5">
-        <div className="mb-4 flex items-center justify-between gap-4">
+    <div className="flex min-h-[520px] flex-col bg-gray-100">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-gray-400">Admin Draft Workspace</p>
             <p className="mt-1 text-sm text-gray-500">结构化富文本草稿，自动保存与线上发布相互隔离。</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <span
               className={[
                 'rounded-full px-3 py-1 text-xs font-medium',
@@ -432,7 +450,7 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
                   : '草稿'}
             </span>
             <button
-              className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
+              className="shrink-0 whitespace-nowrap rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
               type="button"
               disabled={busy}
               onClick={handlePreview}
@@ -440,7 +458,7 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
               用户视角预览
             </button>
             <button
-              className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
+              className="shrink-0 whitespace-nowrap rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
               type="button"
               disabled={busy}
               onClick={handleSaveDraft}
@@ -448,7 +466,7 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
               立即保存
             </button>
             <button
-              className="rounded-md bg-brand-500 px-3 py-2 text-sm text-white disabled:opacity-50"
+              className="shrink-0 whitespace-nowrap rounded-md bg-brand-500 px-3 py-2 text-sm text-white disabled:opacity-50"
               type="button"
               disabled={busy || !publishAction.enabled}
               onClick={handlePublish}
@@ -456,7 +474,7 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
               {publishAction.label}
             </button>
             <button
-              className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
+              className="shrink-0 whitespace-nowrap rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
               type="button"
               disabled={busy || !published}
               onClick={handleUnpublish}
@@ -465,6 +483,8 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
             </button>
           </div>
         </div>
+      </div>
+      <div className="mx-4 mt-4 rounded-t-xl border-b border-gray-100 bg-white px-6 py-5 shadow-sm sm:mx-6 lg:mx-8 lg:mt-8">
         <input
           className="w-full border-none text-2xl font-semibold text-gray-950 outline-none"
           placeholder="未命名文档"
@@ -475,7 +495,7 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
           }}
         />
       </div>
-      <div className="flex-1 space-y-4 p-6">
+      <div className="mx-4 mb-4 flex-1 space-y-4 rounded-b-xl bg-white p-6 shadow-sm sm:mx-6 lg:mx-8 lg:mb-8">
         <div className="flex flex-wrap gap-2">
           <ToolbarButton active={editor?.isActive('bold')} disabled={busy} onClick={() => editor?.chain().focus().toggleBold().run()}>
             加粗
@@ -588,31 +608,35 @@ export function DocumentEditorShell({ document, onPendingChange }: DocumentEdito
           </pre>
         </details>
         {previewOpen ? (
-          <div className="rounded-2xl border border-brand-100 bg-gray-100 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-gray-900">用户视角预览</div>
-                <div className="text-xs text-gray-500">预览当前编辑稿，不会影响线上内容。</div>
+          <div
+            aria-label="用户视角预览"
+            aria-modal="true"
+            className="fixed inset-0 z-50 bg-gray-950/50 p-4 sm:p-6"
+            role="dialog"
+          >
+            <div className="mx-auto flex h-full max-w-[90rem] flex-col overflow-hidden rounded-2xl bg-gray-100 shadow-2xl">
+              <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white p-4 sm:px-6">
+                <div>
+                  <div className="font-semibold text-gray-900">用户视角预览</div>
+                  <div className="text-xs text-gray-500">预览当前编辑稿，不会影响线上内容。</div>
+                </div>
+                <button
+                  className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+                  type="button"
+                  onClick={() => setPreviewOpen(false)}
+                >
+                  关闭预览
+                </button>
               </div>
-              <button
-                className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
-                type="button"
-                onClick={() => setPreviewOpen(false)}
-              >
-                关闭预览
-              </button>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
+                <DocumentReader
+                  assetScope="admin"
+                  document={{ documentId: document.documentId, title, content }}
+                />
+              </div>
             </div>
-            <DocumentReader
-              assetScope="admin"
-              document={{ documentId: document.documentId, title, content }}
-            />
           </div>
         ) : null}
-      </div>
-      <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3 text-xs text-gray-500">
-        <span>draftRevision: {draftRevision}</span>
-        <span>publishedRevision: {publishedRevision ?? '-'}</span>
-        <span>publicationVersion: {publicationVersion ?? '0'}</span>
       </div>
     </div>
   );

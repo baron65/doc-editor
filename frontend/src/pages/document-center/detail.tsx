@@ -29,7 +29,7 @@ export default function DocumentDetailPage() {
   );
 
   return (
-    <main className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto flex max-w-[90rem] gap-4 px-4 py-6 sm:px-6 sm:py-8 xl:gap-6">
       <ResponsiveDocumentTree
         nodes={tree?.nodes ?? []}
         activeDocumentId={documentId}

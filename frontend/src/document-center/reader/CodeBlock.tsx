@@ -11,8 +11,6 @@ import sql from 'highlight.js/lib/languages/sql';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
-import 'highlight.js/styles/github-dark.css';
-
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('css', css);
 hljs.registerLanguage('java', java);
@@ -53,14 +51,14 @@ export function CodeBlock({ code, language }: { code: string; language?: string 
   };
 
   return (
-    <section className="my-5 overflow-hidden rounded-xl border border-gray-800 bg-gray-950" data-code-language={normalizedLanguage}>
-      <header className="flex items-center justify-between border-b border-gray-800 px-4 py-2 text-xs text-gray-400">
+    <section className="my-5 overflow-hidden rounded-lg border border-[#3c3c3c] bg-[#1e1e1e] [font-family:Consolas,'Courier_New',monospace]" data-code-language={normalizedLanguage}>
+      <header className="flex items-center justify-between border-b border-[#3c3c3c] bg-[#252526] px-4 py-2 text-xs text-[#cccccc]">
         <span>{normalizedLanguage}</span>
         <button className="rounded px-2 py-1 text-gray-300 hover:bg-gray-800 hover:text-white" type="button" onClick={() => void copy()}>
           {copied ? '已复制' : '复制'}
         </button>
       </header>
-      <pre className="m-0 overflow-x-auto bg-gray-950 p-4 text-sm leading-6">
+      <pre className="m-0 overflow-x-auto bg-[#1e1e1e] p-4 text-sm leading-6">
         {highlighted ? (
           <code className={`hljs language-${normalizedLanguage}`} dangerouslySetInnerHTML={{ __html: highlighted }} />
         ) : (
