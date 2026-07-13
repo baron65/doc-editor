@@ -13,6 +13,7 @@ interface DocumentTreePanelProps {
   onSelect?: (node: DocumentTreeNode) => void;
   onRenameNode?: (node: DocumentTreeNode) => void;
   onDeleteNode?: (node: DocumentTreeNode) => void;
+  onCreateChild?: (node: DocumentTreeNode, kind: 'DOCUMENT' | 'DIRECTORY') => void;
   onMoveNode?: (
     node: DocumentTreeNode,
     destination: { targetParentId: string; targetIndex: number },
@@ -28,6 +29,7 @@ export function DocumentTreePanel({
   onSelect,
   onRenameNode,
   onDeleteNode,
+  onCreateChild,
   onMoveNode,
 }: DocumentTreePanelProps) {
   const [keyword, setKeyword] = useState('');
@@ -35,6 +37,7 @@ export function DocumentTreePanel({
   const [draggedNodeId, setDraggedNodeId] = useState<string>();
   const [dropTargetNodeId, setDropTargetNodeId] = useState<string>();
   const [openActionNodeId, setOpenActionNodeId] = useState<string>();
+  const [openCreateNodeId, setOpenCreateNodeId] = useState<string>();
   const filteredNodes = useMemo(() => filterTreeByTitle(nodes, keyword), [keyword, nodes]);
   const activeAncestors = useMemo(
     () => collectAncestorDirectoryIds(nodes, activeDocumentId ?? activeNodeId),
@@ -134,6 +137,9 @@ export function DocumentTreePanel({
           onDrop={handleDrop}
           openActionNodeId={openActionNodeId}
           onOpenActionMenu={setOpenActionNodeId}
+          openCreateNodeId={openCreateNodeId}
+          onOpenCreateMenu={setOpenCreateNodeId}
+          onCreateChild={onCreateChild}
           onRenameNode={onRenameNode}
           onDeleteNode={onDeleteNode}
         />
@@ -161,6 +167,9 @@ interface TreeNodeItemProps {
   onDrop: (event: DragEvent, node: DocumentTreeNode) => void;
   openActionNodeId?: string;
   onOpenActionMenu: (nodeId?: string) => void;
+  openCreateNodeId?: string;
+  onOpenCreateMenu: (nodeId?: string) => void;
+  onCreateChild?: (node: DocumentTreeNode, kind: 'DOCUMENT' | 'DIRECTORY') => void;
   onRenameNode?: (node: DocumentTreeNode) => void;
   onDeleteNode?: (node: DocumentTreeNode) => void;
 }
@@ -183,6 +192,9 @@ function TreeNodeItem({
   onDrop,
   openActionNodeId,
   onOpenActionMenu,
+  openCreateNodeId,
+  onOpenCreateMenu,
+  onCreateChild,
   onRenameNode,
   onDeleteNode,
 }: TreeNodeItemProps) {
@@ -190,6 +202,7 @@ function TreeNodeItem({
   const isDirectory = node.nodeType === 'DIRECTORY';
   const canDelete = isDirectory || node.publishState === 'DRAFT';
   const actionMenuOpen = openActionNodeId === node.id;
+  const createMenuOpen = openCreateNodeId === node.id;
   const collapsed = isDirectory && !forceExpanded && collapsedDirectoryIds.has(node.id);
   const statePresentation = !isDirectory && showPublishState && node.publishState
     ? getPublishStatePresentation(node.publishState)
@@ -208,6 +221,50 @@ function TreeNodeItem({
         onDragEnd={onDragEnd}
         onDrop={(event) => onDrop(event, node)}
       >
+        {isDirectory && onCreateChild ? (
+          <div className="relative mr-1 shrink-0">
+            <button
+              aria-label={`在 ${node.title} 下新建`}
+              className="rounded p-1 text-gray-400 hover:bg-brand-50 hover:text-brand-600"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenActionMenu(undefined);
+                onOpenCreateMenu(createMenuOpen ? undefined : node.id);
+              }}
+            >
+              +
+            </button>
+            {createMenuOpen ? (
+              <div
+                className="absolute left-0 top-7 z-30 w-28 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-xs shadow-lg"
+                onClick={(event) => event.stopPropagation()}
+                onMouseLeave={() => onOpenCreateMenu(undefined)}
+              >
+                <button
+                  className="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50"
+                  type="button"
+                  onClick={() => {
+                    onOpenCreateMenu(undefined);
+                    onCreateChild(node, 'DOCUMENT');
+                  }}
+                >
+                  新建子文档
+                </button>
+                <button
+                  className="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50"
+                  type="button"
+                  onClick={() => {
+                    onOpenCreateMenu(undefined);
+                    onCreateChild(node, 'DIRECTORY');
+                  }}
+                >
+                  新建子目录
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {isDirectory ? (
           <button
             aria-label={`${collapsed ? '展开' : '折叠'}目录 ${node.title}`}
@@ -306,6 +363,9 @@ function TreeNodeItem({
               onDrop={onDrop}
               openActionNodeId={openActionNodeId}
               onOpenActionMenu={onOpenActionMenu}
+              openCreateNodeId={openCreateNodeId}
+              onOpenCreateMenu={onOpenCreateMenu}
+              onCreateChild={onCreateChild}
               onRenameNode={onRenameNode}
               onDeleteNode={onDeleteNode}
             />

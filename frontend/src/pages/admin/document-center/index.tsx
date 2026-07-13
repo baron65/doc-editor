@@ -42,6 +42,8 @@ export default function AdminDocumentCenterPage() {
   const [selectedNode, setSelectedNode] = useState<DocumentTreeNode>();
   const [createKind, setCreateKind] = useState<CreateKind>();
   const [createName, setCreateName] = useState('');
+  const [createParentId, setCreateParentId] = useState('0');
+  const [createParentTitle, setCreateParentTitle] = useState('根目录');
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>();
@@ -71,16 +73,11 @@ export default function AdminDocumentCenterPage() {
     }
   }, [documentId, flatNodes, treeRequest.loading]);
 
-  const getCreateParentId = () => {
-    if (selectedNode?.nodeType === 'DIRECTORY') {
-      return selectedNode.id;
-    }
-    return '0';
-  };
-
-  const openCreatePanel = (kind: CreateKind) => {
+  const openCreatePanel = (kind: CreateKind, parentId: string, parentTitle = '根目录') => {
     setCreateKind(kind);
     setCreateName(kind === 'DOCUMENT' ? '新文档' : '新目录');
+    setCreateParentId(parentId);
+    setCreateParentTitle(parentTitle);
     setFeedback(undefined);
   };
 
@@ -106,11 +103,13 @@ export default function AdminDocumentCenterPage() {
     try {
       const operation =
         createKind === 'DOCUMENT'
-          ? await createDocument(getCreateParentId(), name, typedTree.treeRevision)
-          : await createDirectory(getCreateParentId(), name, typedTree.treeRevision);
+          ? await createDocument(createParentId, name, typedTree.treeRevision)
+          : await createDirectory(createParentId, name, typedTree.treeRevision);
       await treeRequest.refresh();
       setCreateKind(undefined);
       setCreateName('');
+      setCreateParentId('0');
+      setCreateParentTitle('根目录');
       setFeedback({
         type: 'success',
         message: createKind === 'DOCUMENT' ? '文档已创建。' : '目录已创建。',
@@ -275,14 +274,14 @@ export default function AdminDocumentCenterPage() {
             <button
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm text-white"
               type="button"
-              onClick={() => openCreatePanel('DOCUMENT')}
+              onClick={() => openCreatePanel('DOCUMENT', '0')}
             >
               新建文档
             </button>
             <button
               className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700"
               type="button"
-              onClick={() => openCreatePanel('DIRECTORY')}
+              onClick={() => openCreatePanel('DIRECTORY', '0')}
             >
               新建目录
             </button>
@@ -292,7 +291,7 @@ export default function AdminDocumentCenterPage() {
               <div className="mb-2 text-xs font-medium text-brand-700">
                 {createKind === 'DOCUMENT' ? '新建文档' : '新建目录'}
                 <span className="ml-1 font-normal text-gray-500">
-                  / 父级：{selectedNode?.nodeType === 'DIRECTORY' ? selectedNode.title : '根目录'}
+                  / 父级：{createParentTitle}
                 </span>
               </div>
               <input
@@ -308,6 +307,8 @@ export default function AdminDocumentCenterPage() {
                   if (event.key === 'Escape') {
                     setCreateKind(undefined);
                     setCreateName('');
+                    setCreateParentId('0');
+                    setCreateParentTitle('根目录');
                   }
                 }}
               />
@@ -327,6 +328,8 @@ export default function AdminDocumentCenterPage() {
                   onClick={() => {
                     setCreateKind(undefined);
                     setCreateName('');
+                    setCreateParentId('0');
+                    setCreateParentTitle('根目录');
                   }}
                 >
                   取消
@@ -371,6 +374,7 @@ export default function AdminDocumentCenterPage() {
             showPublishState
             onRenameNode={(node) => void handleRenameNode(node)}
             onDeleteNode={(node) => void deleteTreeNode(node)}
+            onCreateChild={(node, kind) => openCreatePanel(kind, node.id, node.title)}
             onMoveNode={(node, destination) => void handleTreeDrop(node, destination)}
             onSelect={(node) => void handleSelectNode(node)}
           />

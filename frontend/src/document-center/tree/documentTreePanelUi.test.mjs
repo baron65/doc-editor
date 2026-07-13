@@ -18,3 +18,12 @@ test('树节点通过更多菜单承载重命名与删除操作', () => {
   assert.match(adminPageSource, /确认永久删除草稿/);
   assert.match(adminPageSource, /await deleteNode/);
 });
+
+test('顶部新建固定在根节点且目录节点提供子节点新建入口', () => {
+  assert.match(adminPageSource, /openCreatePanel\('DOCUMENT', '0'\)/);
+  assert.match(adminPageSource, /openCreatePanel\('DIRECTORY', '0'\)/);
+  assert.match(treeSource, /onCreateChild\?:/);
+  assert.match(treeSource, /新建子文档/);
+  assert.match(treeSource, /新建子目录/);
+  assert.match(treeSource, /isDirectory && onCreateChild/);
+});
