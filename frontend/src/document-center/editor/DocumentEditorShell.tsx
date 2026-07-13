@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useEditor } from '@tiptap/react';
 import { DOCUMENT_SCHEMA_VERSION, emptyDocumentContent } from '@/document-center/schema/documentSchema';
 import { DocumentReader } from '@/document-center/reader/DocumentReader';
@@ -26,6 +26,10 @@ interface DocumentEditorShellProps {
   onDocumentChange?: () => unknown | Promise<unknown>;
 }
 
+export interface DocumentEditorShellHandle {
+  renameDocumentTitle: (nextTitle: string) => Promise<void>;
+}
+
 interface DraftSnapshot {
   title: string;
   content: DocumentContent;
@@ -33,7 +37,10 @@ interface DraftSnapshot {
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'failed' | 'conflict';
 
-export function DocumentEditorShell({ document, onPendingChange, onDocumentChange }: DocumentEditorShellProps) {
+export const DocumentEditorShell = forwardRef<DocumentEditorShellHandle, DocumentEditorShellProps>(function DocumentEditorShell(
+  { document, onPendingChange, onDocumentChange },
+  ref,
+) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const imageActionRef = useRef<'insert' | 'replace'>('insert');
@@ -131,6 +138,22 @@ export function DocumentEditorShell({ document, onPendingChange, onDocumentChang
       }
     },
   }, [extensions]);
+
+  useImperativeHandle(ref, () => ({
+    async renameDocumentTitle(nextTitle: string) {
+      if (!document) {
+        return;
+      }
+      const nextContent = (editor?.getJSON() as DocumentContent | undefined) ?? content;
+      dirtyRef.current = false;
+      conflictRef.current = false;
+      setTitle(nextTitle);
+      setContent(nextContent);
+      setDirty(false);
+      saveCoordinator.enqueue({ title: nextTitle, content: nextContent });
+      await saveCoordinator.flush();
+    },
+  }), [content, document, editor, saveCoordinator]);
 
   useEffect(() => {
     if (!document) {
@@ -654,7 +677,7 @@ export function DocumentEditorShell({ document, onPendingChange, onDocumentChang
       {dialog}
     </div>
   );
-}
+});
 
 function saveStateLabel(state: SaveState) {
   const labels: Record<SaveState, string> = {

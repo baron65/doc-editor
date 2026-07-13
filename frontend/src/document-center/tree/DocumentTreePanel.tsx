@@ -11,11 +11,12 @@ interface DocumentTreePanelProps {
   searchable?: boolean;
   showPublishState?: boolean;
   onSelect?: (node: DocumentTreeNode) => void;
+  onRenameNode?: (node: DocumentTreeNode) => void;
+  onDeleteNode?: (node: DocumentTreeNode) => void;
   onMoveNode?: (
     node: DocumentTreeNode,
     destination: { targetParentId: string; targetIndex: number },
   ) => void;
-  onDeleteDraft?: (node: DocumentTreeNode) => void;
 }
 
 export function DocumentTreePanel({
@@ -25,13 +26,15 @@ export function DocumentTreePanel({
   searchable = false,
   showPublishState = false,
   onSelect,
+  onRenameNode,
+  onDeleteNode,
   onMoveNode,
-  onDeleteDraft,
 }: DocumentTreePanelProps) {
   const [keyword, setKeyword] = useState('');
   const [collapsedDirectoryIds, setCollapsedDirectoryIds] = useState<Set<string>>(new Set());
   const [draggedNodeId, setDraggedNodeId] = useState<string>();
   const [dropTargetNodeId, setDropTargetNodeId] = useState<string>();
+  const [openActionNodeId, setOpenActionNodeId] = useState<string>();
   const filteredNodes = useMemo(() => filterTreeByTitle(nodes, keyword), [keyword, nodes]);
   const activeAncestors = useMemo(
     () => collectAncestorDirectoryIds(nodes, activeDocumentId ?? activeNodeId),
@@ -129,7 +132,10 @@ export function DocumentTreePanel({
             setDropTargetNodeId(undefined);
           }}
           onDrop={handleDrop}
-          onDeleteDraft={onDeleteDraft}
+          openActionNodeId={openActionNodeId}
+          onOpenActionMenu={setOpenActionNodeId}
+          onRenameNode={onRenameNode}
+          onDeleteNode={onDeleteNode}
         />
       ))}
       </div>
@@ -153,7 +159,10 @@ interface TreeNodeItemProps {
   onDragOver: (event: DragEvent, node: DocumentTreeNode) => void;
   onDragEnd: () => void;
   onDrop: (event: DragEvent, node: DocumentTreeNode) => void;
-  onDeleteDraft?: (node: DocumentTreeNode) => void;
+  openActionNodeId?: string;
+  onOpenActionMenu: (nodeId?: string) => void;
+  onRenameNode?: (node: DocumentTreeNode) => void;
+  onDeleteNode?: (node: DocumentTreeNode) => void;
 }
 
 function TreeNodeItem({
@@ -172,10 +181,15 @@ function TreeNodeItem({
   onDragOver,
   onDragEnd,
   onDrop,
-  onDeleteDraft,
+  openActionNodeId,
+  onOpenActionMenu,
+  onRenameNode,
+  onDeleteNode,
 }: TreeNodeItemProps) {
   const active = node.id === activeDocumentId || node.id === activeNodeId;
   const isDirectory = node.nodeType === 'DIRECTORY';
+  const canDelete = isDirectory || node.publishState === 'DRAFT';
+  const actionMenuOpen = openActionNodeId === node.id;
   const collapsed = isDirectory && !forceExpanded && collapsedDirectoryIds.has(node.id);
   const statePresentation = !isDirectory && showPublishState && node.publishState
     ? getPublishStatePresentation(node.publishState)
@@ -222,21 +236,52 @@ function TreeNodeItem({
             ) : null}
           </span>
         </button>
-        {!isDirectory && node.publishState === 'DRAFT' && onDeleteDraft ? (
-          <button
-            aria-label={`删除草稿 ${node.draftTitle ?? node.title}`}
-            className="mr-1 shrink-0 rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-            title="删除草稿"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDeleteDraft(node);
-            }}
-          >
-            <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" />
-            </svg>
-          </button>
+        {(onRenameNode || onDeleteNode) ? (
+          <div className="relative mr-1 shrink-0">
+            <button
+              aria-label={`${node.draftTitle ?? node.title} 更多操作`}
+              className="rounded p-1.5 text-gray-400 opacity-80 hover:bg-gray-100 hover:text-gray-700"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenActionMenu(actionMenuOpen ? undefined : node.id);
+              }}
+            >
+              ⋯
+            </button>
+            {actionMenuOpen ? (
+              <div
+                className="absolute right-0 top-7 z-30 w-28 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-xs shadow-lg"
+                onClick={(event) => event.stopPropagation()}
+                onMouseLeave={() => onOpenActionMenu(undefined)}
+              >
+                {onRenameNode ? (
+                  <button
+                    className="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50"
+                    type="button"
+                    onClick={() => {
+                      onOpenActionMenu(undefined);
+                      onRenameNode(node);
+                    }}
+                  >
+                    重命名
+                  </button>
+                ) : null}
+                {onDeleteNode && canDelete ? (
+                  <button
+                    className="block w-full px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                    type="button"
+                    onClick={() => {
+                      onOpenActionMenu(undefined);
+                      onDeleteNode(node);
+                    }}
+                  >
+                    删除节点
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
       {!!node.children?.length && !collapsed && (
@@ -259,7 +304,10 @@ function TreeNodeItem({
               onDragOver={onDragOver}
               onDragEnd={onDragEnd}
               onDrop={onDrop}
-              onDeleteDraft={onDeleteDraft}
+              openActionNodeId={openActionNodeId}
+              onOpenActionMenu={onOpenActionMenu}
+              onRenameNode={onRenameNode}
+              onDeleteNode={onDeleteNode}
             />
           ))}
         </div>

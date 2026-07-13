@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { history, useParams, useRequest } from '@umijs/max';
-import { DocumentEditorShell } from '@/document-center/editor/DocumentEditorShell';
+import { DocumentEditorShell, type DocumentEditorShellHandle } from '@/document-center/editor/DocumentEditorShell';
 import { shouldConfirmEditorNavigation } from '@/document-center/editor/editorNavigationGuard';
 import { DocumentTreePanel } from '@/document-center/tree/DocumentTreePanel';
-import {
-  flattenTreeNodes,
-  getMoveTargetDirectories,
-  getTargetAppendIndex,
-} from '@/document-center/tree/treeManagementModel';
+import { flattenTreeNodes } from '@/document-center/tree/treeManagementModel';
 import {
   createDirectory,
   createDocument,
@@ -17,6 +13,7 @@ import {
   moveNode,
   passthroughRequestResult,
   renameDirectory,
+  saveDraft,
 } from '@/services/documentCenter';
 import type { AdminDocumentDetail, DocumentTree, DocumentTreeNode } from '@/types/documentCenter';
 import { useAppDialog } from '@/components/app-dialog/AppDialog';
@@ -41,24 +38,16 @@ export default function AdminDocumentCenterPage() {
   const typedTree = treeRequest.data as DocumentTree | undefined;
   const document = detailRequest.data as AdminDocumentDetail | undefined;
   const syncedDocumentIdRef = useRef('');
+  const editorShellRef = useRef<DocumentEditorShellHandle>(null);
   const [selectedNode, setSelectedNode] = useState<DocumentTreeNode>();
   const [createKind, setCreateKind] = useState<CreateKind>();
   const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>();
-  const [moveTargetParentId, setMoveTargetParentId] = useState('0');
   const [hasPendingEditorWork, setHasPendingEditorWork] = useState(false);
   const { confirm, prompt, dialog } = useAppDialog();
   const flatNodes = useMemo(() => flattenTreeNodes(typedTree?.nodes ?? []), [typedTree?.nodes]);
-  const moveTargets = useMemo(
-    () => getMoveTargetDirectories(typedTree?.nodes ?? [], selectedNode),
-    [selectedNode, typedTree?.nodes],
-  );
-  const selectedSiblingInfo = useMemo(
-    () => getSiblingInfo(flatNodes, selectedNode),
-    [flatNodes, selectedNode],
-  );
   const activeDocumentNode = useMemo(
     () => flatNodes.find((node) => node.nodeType === 'DOCUMENT' && node.id === documentId),
     [documentId, flatNodes],
@@ -70,7 +59,6 @@ export default function AdminDocumentCenterPage() {
     }
     syncedDocumentIdRef.current = documentId;
     setSelectedNode(activeDocumentNode);
-    setMoveTargetParentId(activeDocumentNode.parentId);
   }, [activeDocumentNode, documentId]);
 
   useEffect(() => {
@@ -141,30 +129,47 @@ export default function AdminDocumentCenterPage() {
     }
   };
 
-  const handleRenameDirectory = async () => {
-    if (!selectedNode || selectedNode.nodeType !== 'DIRECTORY' || !typedTree?.treeRevision) {
+  const handleRenameNode = async (node: DocumentTreeNode) => {
+    if (!typedTree?.treeRevision) {
       return;
     }
+    const currentTitle = node.draftTitle ?? node.title;
     const nextName = await prompt({
-      title: '重命名目录',
-      description: `请输入“${selectedNode.title}”的新名称。`,
-      initialValue: selectedNode.title,
+      title: node.nodeType === 'DIRECTORY' ? '重命名目录' : '重命名文档',
+      description: `请输入“${currentTitle}”的新名称。`,
+      initialValue: currentTitle,
       confirmText: '保存名称',
-      validate: (value) => value.trim() ? undefined : '目录名称不能为空。',
+      validate: (value) => value.trim() ? undefined : '名称不能为空。',
     });
     if (!nextName?.trim()) {
       return;
     }
+    const normalizedName = nextName.trim();
     setFeedback(undefined);
     try {
-      await renameDirectory(selectedNode.id, {
-        name: nextName.trim(),
-        expectedTreeRevision: typedTree.treeRevision,
-      });
+      if (node.nodeType === 'DIRECTORY') {
+        await renameDirectory(node.id, {
+          name: normalizedName,
+          expectedTreeRevision: typedTree.treeRevision,
+        });
+      } else {
+        if (document?.documentId === node.id) {
+          await editorShellRef.current?.renameDocumentTitle(normalizedName);
+          await detailRequest.refresh();
+        } else {
+          const draft = await getAdminDocument(node.id);
+          await saveDraft(node.id, {
+            title: normalizedName,
+            schemaVersion: draft.schemaVersion,
+            content: draft.content,
+            expectedDraftRevision: draft.draftRevision,
+          });
+        }
+      }
       await treeRequest.refresh();
-      setFeedback({ type: 'success', message: '目录已重命名。' });
+      setFeedback({ type: 'success', message: node.nodeType === 'DIRECTORY' ? '目录已重命名。' : '文档已重命名。' });
     } catch (error) {
-      setFeedback({ type: 'error', message: getErrorMessage(error, '重命名目录失败。') });
+      setFeedback({ type: 'error', message: getErrorMessage(error, '重命名失败。') });
     }
   };
 
@@ -216,57 +221,6 @@ export default function AdminDocumentCenterPage() {
     }
   };
 
-  const handleDeleteNode = async () => {
-    if (selectedNode) {
-      await deleteTreeNode(selectedNode);
-    }
-  };
-
-  const handleDeleteDraft = async (node: DocumentTreeNode) => {
-    await deleteTreeNode(node);
-  };
-
-  const handleMoveSelected = async (direction: 'UP' | 'DOWN') => {
-    if (!selectedNode || !typedTree?.treeRevision || selectedSiblingInfo.index < 0) {
-      return;
-    }
-    const nextIndex = direction === 'UP' ? selectedSiblingInfo.index - 1 : selectedSiblingInfo.index + 1;
-    if (nextIndex < 0 || nextIndex >= selectedSiblingInfo.siblings.length) {
-      return;
-    }
-    setFeedback(undefined);
-    try {
-      await moveNode(selectedNode.id, {
-        targetParentId: selectedNode.parentId,
-        targetIndex: nextIndex,
-        expectedTreeRevision: typedTree.treeRevision,
-      });
-      await treeRequest.refresh();
-      setFeedback({ type: 'success', message: '节点顺序已更新。' });
-    } catch (error) {
-      setFeedback({ type: 'error', message: getErrorMessage(error, '移动节点失败。') });
-    }
-  };
-
-  const handleMoveToDirectory = async () => {
-    if (!selectedNode || !typedTree?.treeRevision) {
-      return;
-    }
-    setFeedback(undefined);
-    try {
-      await moveNode(selectedNode.id, {
-        targetParentId: moveTargetParentId,
-        targetIndex: getTargetAppendIndex(typedTree.nodes, moveTargetParentId, selectedNode),
-        expectedTreeRevision: typedTree.treeRevision,
-      });
-      setSelectedNode({ ...selectedNode, parentId: moveTargetParentId });
-      await treeRequest.refresh();
-      setFeedback({ type: 'success', message: '节点已移动到目标目录末尾。' });
-    } catch (error) {
-      setFeedback({ type: 'error', message: getErrorMessage(error, '跨目录移动失败。') });
-    }
-  };
-
   const handleTreeDrop = async (
     node: DocumentTreeNode,
     destination: { targetParentId: string; targetIndex: number },
@@ -281,7 +235,6 @@ export default function AdminDocumentCenterPage() {
         expectedTreeRevision: typedTree.treeRevision,
       });
       setSelectedNode({ ...node, parentId: destination.targetParentId });
-      setMoveTargetParentId(destination.targetParentId);
       await treeRequest.refresh();
       setFeedback({ type: 'success', message: '拖拽移动已保存。' });
     } catch (error) {
@@ -292,7 +245,6 @@ export default function AdminDocumentCenterPage() {
   const handleSelectNode = async (node: DocumentTreeNode) => {
     if (node.nodeType === 'DIRECTORY') {
       setSelectedNode(node);
-      setMoveTargetParentId(node.parentId);
       return;
     }
     if (
@@ -307,7 +259,6 @@ export default function AdminDocumentCenterPage() {
       return;
     }
     setSelectedNode(node);
-    setMoveTargetParentId(node.parentId);
     if (node.id !== documentId) {
       history.push(`/admin/document-center/${node.id}`);
     }
@@ -408,76 +359,6 @@ export default function AdminDocumentCenterPage() {
               {feedback.message}
             </div>
           )}
-          <div className="mt-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
-            <div className="mb-2 truncate">
-              当前选中：{selectedNode ? `${selectedNode.nodeType === 'DIRECTORY' ? '目录' : '文档'} / ${selectedNode.title}` : '根目录'}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
-                type="button"
-                disabled={selectedNode?.nodeType !== 'DIRECTORY'}
-                onClick={handleRenameDirectory}
-              >
-                重命名目录
-              </button>
-              <button
-                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
-                type="button"
-                disabled={
-                  deleting
-                  || !selectedNode
-                  || (selectedNode.nodeType === 'DOCUMENT' && selectedNode.publishState !== 'DRAFT')
-                }
-                onClick={handleDeleteNode}
-              >
-                删除节点
-              </button>
-              <button
-                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
-                type="button"
-                disabled={!selectedNode || selectedSiblingInfo.index <= 0}
-                onClick={() => handleMoveSelected('UP')}
-              >
-                上移
-              </button>
-              <button
-                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
-                type="button"
-                disabled={
-                  !selectedNode ||
-                  selectedSiblingInfo.index < 0 ||
-                  selectedSiblingInfo.index >= selectedSiblingInfo.siblings.length - 1
-                }
-                onClick={() => handleMoveSelected('DOWN')}
-              >
-                下移
-              </button>
-            </div>
-            <div className="mt-2 flex gap-2">
-              <select
-                aria-label="目标目录"
-                className="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
-                disabled={!selectedNode}
-                value={moveTargetParentId}
-                onChange={(event) => setMoveTargetParentId(event.target.value)}
-              >
-                {moveTargets.map((target) => (
-                  <option key={target.id} value={target.id}>
-                    {`${'　'.repeat(Math.max(0, target.depth - 1))}${target.title}`}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
-                type="button"
-                disabled={!selectedNode || !moveTargets.some((target) => target.id === moveTargetParentId)}
-                onClick={handleMoveToDirectory}
-              >
-                移动到
-              </button>
-            </div>
-          </div>
         </div>
         {treeRequest.loading ? (
           <div className="text-sm text-gray-500">加载中...</div>
@@ -488,7 +369,8 @@ export default function AdminDocumentCenterPage() {
             activeNodeId={selectedNode?.id}
             searchable
             showPublishState
-            onDeleteDraft={(node) => void handleDeleteDraft(node)}
+            onRenameNode={(node) => void handleRenameNode(node)}
+            onDeleteNode={(node) => void deleteTreeNode(node)}
             onMoveNode={(node, destination) => void handleTreeDrop(node, destination)}
             onSelect={(node) => void handleSelectNode(node)}
           />
@@ -504,6 +386,7 @@ export default function AdminDocumentCenterPage() {
           </div>
         ) : (
           <DocumentEditorShell
+            ref={editorShellRef}
             document={document}
             onDocumentChange={treeRequest.refresh}
             onPendingChange={setHasPendingEditorWork}
@@ -513,19 +396,6 @@ export default function AdminDocumentCenterPage() {
       {dialog}
     </main>
   );
-}
-
-function getSiblingInfo(nodes: DocumentTreeNode[], selectedNode?: DocumentTreeNode) {
-  if (!selectedNode) {
-    return { siblings: [] as DocumentTreeNode[], index: -1 };
-  }
-  const siblings = nodes
-    .filter((node) => node.parentId === selectedNode.parentId)
-    .sort((left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id));
-  return {
-    siblings,
-    index: siblings.findIndex((node) => node.id === selectedNode.id),
-  };
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
