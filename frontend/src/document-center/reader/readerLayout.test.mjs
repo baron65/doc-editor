@@ -9,6 +9,9 @@ const treeSource = readFileSync(
 const readerSource = readFileSync(new URL('./DocumentReader.tsx', import.meta.url), 'utf8');
 const codeBlockSource = readFileSync(new URL('./CodeBlock.tsx', import.meta.url), 'utf8');
 const globalStyles = readFileSync(new URL('../../global.css', import.meta.url), 'utf8');
+const editorSource = readFileSync(new URL('../editor/DocumentEditorShell.tsx', import.meta.url), 'utf8');
+const calloutSource = readFileSync(new URL('../callout/CalloutExtension.ts', import.meta.url), 'utf8');
+const schemaSource = readFileSync(new URL('../editor/documentSchemaExtensions.ts', import.meta.url), 'utf8');
 
 test('阅读页只在宽屏常驻紧凑文档树', () => {
   assert.match(treeSource, /className="[^"\n]*hidden[^"\n]*w-52[^"\n]*shrink-0[^"\n]*lg:block[^"\n]*xl:w-56/);
@@ -43,4 +46,25 @@ test('编辑与阅读代码块统一使用微软 Visual Studio 深色主题', ()
   assert.match(globalStyles, /\.document-editor pre::before/);
   assert.match(globalStyles, /content: 'VS Code'/);
   assert.match(globalStyles, /padding-top: 3rem/);
+});
+
+test('编辑器和阅读器共享同一套正文视觉层', () => {
+  assert.match(editorSource, /document-body document-editor/);
+  assert.match(readerSource, /document-body document-content-body/);
+  assert.doesNotMatch(readerSource, /document-content-body space-y-3/);
+  assert.match(globalStyles, /\.document-body p/);
+  assert.match(globalStyles, /\.document-body h1/);
+  assert.match(globalStyles, /\.document-body table/);
+  assert.match(globalStyles, /\.document-body img/);
+  assert.match(globalStyles, /\.document-body code:not\(pre code\)/);
+});
+
+test('提示块和图片在编辑态复用阅读态视觉语义', () => {
+  assert.match(calloutSource, /class: 'callout-node'/);
+  assert.doesNotMatch(calloutSource, /border-blue-200 bg-blue-50/);
+  assert.match(globalStyles, /\[data-callout-kind='warning'\]/);
+  assert.match(globalStyles, /\[data-callout-kind='success'\]/);
+  assert.match(globalStyles, /\[data-callout-kind='danger'\]/);
+  assert.match(schemaSource, /class: 'document-image'/);
+  assert.match(schemaSource, /figcaption/);
 });

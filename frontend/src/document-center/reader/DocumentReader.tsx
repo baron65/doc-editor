@@ -88,7 +88,7 @@ export function DocumentReader({
         {document.publishedAt ? (
           <div className="mb-6 text-xs text-gray-400">最后发布：{formatPublishedAt(document.publishedAt)}</div>
         ) : <div className="mb-4" />}
-        <div className="document-content-body space-y-3">
+        <div className="document-body document-content-body">
           {renderChildren(readerContent.content.content, document.documentId, assetScope)}
         </div>
         {previous || next ? (
@@ -184,23 +184,22 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
       return <CodeBlock key={key} code={extractText(node)} language={stringAttribute(node.attrs?.language)} />;
     case 'table':
       return (
-        <div key={key} className="my-5 overflow-x-auto rounded-xl border border-gray-200">
-          <table className="w-full border-collapse text-left text-sm">
+        <div key={key} className="document-table-wrapper">
+          <table>
             <tbody>{renderChildren(node.content, documentId, assetScope)}</tbody>
           </table>
         </div>
       );
     case 'tableRow':
-      return <tr key={key} className="border-b border-gray-200 last:border-b-0">{renderChildren(node.content, documentId, assetScope)}</tr>;
+      return <tr key={key}>{renderChildren(node.content, documentId, assetScope)}</tr>;
     case 'tableHeader':
-      return <th key={key} className="bg-gray-50 px-4 py-3 font-semibold text-gray-800">{renderChildren(node.content, documentId, assetScope)}</th>;
+      return <th key={key}>{renderChildren(node.content, documentId, assetScope)}</th>;
     case 'tableCell':
-      return <td key={key} className="px-4 py-3 align-top text-gray-700">{renderChildren(node.content, documentId, assetScope)}</td>;
+      return <td key={key}>{renderChildren(node.content, documentId, assetScope)}</td>;
     case 'callout': {
       const kind = typeof node.attrs?.kind === 'string' ? node.attrs.kind : 'info';
-      const style = calloutStyle(kind);
       return (
-        <aside key={key} data-callout-kind={kind} className={`my-4 rounded-xl border px-4 py-3 ${style}`}>
+        <aside key={key} data-callout-kind={kind} className="callout-node">
           {renderChildren(node.content, documentId, assetScope)}
         </aside>
       );
@@ -273,9 +272,9 @@ function renderImage(node: DocumentContent, documentId: string, assetScope: Asse
   const alt = typeof node.attrs?.alt === 'string' ? node.attrs.alt : '';
   const caption = typeof node.attrs?.caption === 'string' ? node.attrs.caption : '';
   return (
-    <figure key={key}>
-      <img className="rounded-xl border border-gray-100" src={src} alt={alt} />
-      {caption ? <figcaption className="mt-2 text-center text-sm text-gray-500">{caption}</figcaption> : null}
+    <figure key={key} className="document-image">
+      <img src={src} alt={alt} />
+      {caption ? <figcaption>{caption}</figcaption> : null}
     </figure>
   );
 }
@@ -309,19 +308,6 @@ function extractText(node: DocumentContent): string {
     return node.text;
   }
   return (node.content ?? []).map(extractText).join('');
-}
-
-function calloutStyle(kind: string) {
-  switch (kind) {
-    case 'warning':
-      return 'border-amber-200 bg-amber-50 text-amber-900';
-    case 'success':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-900';
-    case 'danger':
-      return 'border-red-200 bg-red-50 text-red-900';
-    default:
-      return 'border-blue-200 bg-blue-50 text-blue-900';
-  }
 }
 
 function NavigationLink({ direction, item }: { direction: 'previous' | 'next'; item?: DocumentNavigationItem }) {

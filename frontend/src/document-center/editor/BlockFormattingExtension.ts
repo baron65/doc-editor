@@ -1,6 +1,6 @@
 import { Extension, Mark, mergeAttributes } from '@tiptap/core';
 import {
-  buildBlockTextStyle,
+  buildBlockTextAlignHtmlAttributes,
   normalizeBlockIndent,
   normalizeBlockTextAlign,
   normalizeFontSize,
@@ -77,10 +77,7 @@ export const BlockFormattingExtension = Extension.create({
         textAlign: {
           default: 'left',
           parseHTML: (element) => normalizeBlockTextAlign(element.getAttribute('data-text-align') ?? element.style.textAlign),
-          renderHTML: (attrs) => {
-            const textAlign = normalizeBlockTextAlign(attrs.textAlign);
-            return { 'data-text-align': textAlign, style: buildBlockTextStyle({ textAlign }).textAlign };
-          },
+          renderHTML: (attrs) => buildBlockTextAlignHtmlAttributes(attrs.textAlign),
         },
         indent: {
           default: 0,

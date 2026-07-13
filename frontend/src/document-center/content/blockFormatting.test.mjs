@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   SAFE_TEXT_COLORS,
   SAFE_FONT_SIZES,
+  buildBlockTextAlignHtmlAttributes,
   buildBlockTextStyle,
   normalizeBlockIndent,
   normalizeBlockTextAlign,
@@ -40,5 +41,12 @@ test('Reader 样式只由规范化属性生成', () => {
   assert.deepEqual(buildBlockTextStyle({ textAlign: 'invalid', indent: 20 }), {
     textAlign: 'left',
     marginLeft: '144px',
+  });
+});
+
+test('编辑器对齐属性输出完整 CSS 声明', () => {
+  assert.deepEqual(buildBlockTextAlignHtmlAttributes('center'), {
+    'data-text-align': 'center',
+    style: 'text-align: center',
   });
 });

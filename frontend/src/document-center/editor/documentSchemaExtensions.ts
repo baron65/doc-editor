@@ -2,6 +2,7 @@ import Image from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import StarterKit from '@tiptap/starter-kit';
+import { mergeAttributes } from '@tiptap/core';
 import { AttachmentExtension } from '../attachment/AttachmentExtension';
 import { CalloutExtension } from '../callout/CalloutExtension';
 import { MermaidExtension } from '../mermaid/MermaidExtension';
@@ -24,6 +25,19 @@ export function createDocumentSchemaExtensions() {
           assetId: { default: null },
           caption: { default: null },
         };
+      },
+      renderHTML({ HTMLAttributes, node }) {
+        const { assetId, caption, ...imageAttributes } = HTMLAttributes;
+        return [
+          'figure',
+          mergeAttributes({
+            class: 'document-image',
+            'data-type': 'image',
+            'data-asset-id': assetId,
+          }),
+          ['img', mergeAttributes(this.options.HTMLAttributes, imageAttributes)],
+          ...(node.attrs.caption ? [['figcaption', {}, String(node.attrs.caption)]] : []),
+        ];
       },
     }),
     Table.configure({ resizable: false }),

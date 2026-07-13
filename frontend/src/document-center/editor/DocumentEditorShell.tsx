@@ -120,7 +120,7 @@ export function DocumentEditorShell({ document, onPendingChange, onDocumentChang
     editorProps: {
       attributes: {
         class:
-          'document-editor min-h-[320px] rounded-xl border border-gray-200 bg-white py-4 pr-5 pl-14 text-sm leading-7 text-gray-800 outline-none',
+          'document-body document-editor min-h-[320px] rounded-xl border border-gray-200 bg-white py-4 pr-5 pl-14 outline-none',
       },
     },
     onUpdate: ({ editor: currentEditor }) => {

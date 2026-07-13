@@ -45,6 +45,14 @@ export function normalizeFontSize(value: unknown): string | null {
   return typeof value === 'string' && SAFE_FONT_SIZE_VALUES.has(value) ? value : null;
 }
 
+export function buildBlockTextAlignHtmlAttributes(value: unknown) {
+  const textAlign = normalizeBlockTextAlign(value);
+  return {
+    'data-text-align': textAlign,
+    style: `text-align: ${textAlign}`,
+  };
+}
+
 export function buildBlockTextStyle(attrs?: Record<string, unknown>) {
   return {
     textAlign: normalizeBlockTextAlign(attrs?.textAlign),

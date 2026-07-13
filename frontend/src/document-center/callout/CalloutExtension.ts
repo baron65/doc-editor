@@ -31,7 +31,7 @@ export const CalloutExtension = Node.create({
       'aside',
       mergeAttributes(HTMLAttributes, {
         'data-callout-kind': HTMLAttributes.kind ?? 'info',
-        class: 'callout-node rounded-xl border border-blue-200 bg-blue-50 px-4 py-3',
+        class: 'callout-node',
       }),
       0,
     ];
