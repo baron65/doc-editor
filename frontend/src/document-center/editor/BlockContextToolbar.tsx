@@ -30,6 +30,7 @@ import {
   normalizeBlockIndent,
   type BlockTextAlign,
 } from '../content/blockFormatting';
+import { TableSizePicker } from './TableSizePicker';
 
 interface BlockContextToolbarProps {
   editor: Editor | null;
@@ -66,6 +67,12 @@ interface CascadeMenuState {
   left: number;
 }
 
+interface TablePickerState {
+  top: number;
+  left: number;
+  selectionPos: number;
+}
+
 export function BlockContextToolbar({
   editor,
   disabled,
@@ -82,6 +89,7 @@ export function BlockContextToolbar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [cascadeMenu, setCascadeMenu] = useState<CascadeMenuState>();
   const [selectionMenu, setSelectionMenu] = useState<{ top: number; left: number }>();
+  const [tablePicker, setTablePicker] = useState<TablePickerState>();
   const closeMenuTimerRef = useRef<number>();
   const isMac = isMacPlatform();
 
@@ -121,6 +129,16 @@ export function BlockContextToolbar({
   }, [editor]);
 
   useEffect(() => {
+    if (!tablePicker) return undefined;
+    const closeOutside = (event: PointerEvent) => {
+      const element = event.target instanceof Element ? event.target : undefined;
+      if (!element?.closest('.table-size-picker')) setTablePicker(undefined);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [tablePicker]);
+
+  useEffect(() => {
     if (!editor) {
       return undefined;
     }
@@ -145,6 +163,14 @@ export function BlockContextToolbar({
         onEditImageCaption,
         onInsertAttachment,
         onInsertMermaid,
+        onInsertTable: (position) => {
+          const coords = editor.view.coordsAtPos(position);
+          setTablePicker({
+            top: Math.max(16, Math.min(coords.top, window.innerHeight - 520)),
+            left: Math.max(16, Math.min(coords.left, window.innerWidth - 368)),
+            selectionPos: position,
+          });
+        },
       })) {
         return;
       }
@@ -237,6 +263,13 @@ export function BlockContextToolbar({
     setMenuOpen(true);
   };
 
+  const activateBlockHandle = () => {
+    if (target?.type === 'table') {
+      editor.chain().focus().setNodeSelection(target.pos).run();
+    }
+    openMenu();
+  };
+
   const openCascadeMenu = (
     view: CascadeMenuView,
     event: ReactMouseEvent<HTMLButtonElement>,
@@ -250,6 +283,29 @@ export function BlockContextToolbar({
       top: Math.max(8, Math.min(rect.top, window.innerHeight - estimatedHeight - 8)),
       left: Math.max(8, Math.min(rect.right + 6, window.innerWidth - width - 8)),
     });
+  };
+
+  const openTablePicker = () => {
+    if (!target) return;
+    const width = 352;
+    setTablePicker({
+      top: Math.max(16, Math.min(target.viewportTop, window.innerHeight - 520)),
+      left: Math.max(16, Math.min(target.handleViewportLeft + 44, window.innerWidth - width - 16)),
+      selectionPos: target.selectionPos,
+    });
+    setMenuOpen(false);
+    setCascadeMenu(undefined);
+    clearTargetHighlight();
+  };
+
+  const insertSelectedTable = (rows: number, columns: number) => {
+    if (!tablePicker) return;
+    editor.chain()
+      .focus()
+      .setTextSelection(tablePicker.selectionPos)
+      .insertTable({ rows, cols: columns, withHeaderRow: true })
+      .run();
+    setTablePicker(undefined);
   };
 
   const handleMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -413,7 +469,7 @@ export function BlockContextToolbar({
             aria-label={presentation.label}
             className="flex h-8 min-w-8 items-center justify-center rounded-md border border-gray-200 bg-white px-1.5 text-xs font-medium text-gray-500 shadow-sm hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
             type="button"
-            onClick={openMenu}
+            onClick={activateBlockHandle}
             onPointerEnter={() => {
               cancelScheduledClose();
               highlightTarget();
@@ -466,7 +522,7 @@ export function BlockContextToolbar({
                 <MenuButton
                   label="表格"
                   shortcut={shortcutLabel('table')}
-                  onRun={() => run(() => insertAfterTarget(createTableContent()))}
+                  onRun={openTablePicker}
                 />
                 <MenuButton label="图片" shortcut={shortcutLabel('image')} onRun={() => run(() => onInsertImage(insertionPosition()))} />
                 <MenuButton label="附件" shortcut={shortcutLabel('attachment')} onRun={() => run(() => onInsertAttachment(insertionPosition()))} />
@@ -493,15 +549,6 @@ export function BlockContextToolbar({
                   />
                 ))}
               </MenuGroup>
-              {target.type === 'table' ? (
-                <MenuGroup label="表格操作">
-                  <MenuButton label="插入列" shortcut={shortcutLabel('addColumn')} onRun={() => run(() => focusTarget().addColumnAfter().run())} />
-                  <MenuButton label="删除列" shortcut={shortcutLabel('deleteColumn')} onRun={() => run(() => focusTarget().deleteColumn().run())} />
-                  <MenuButton label="插入行" shortcut={shortcutLabel('addRow')} onRun={() => run(() => focusTarget().addRowAfter().run())} />
-                  <MenuButton label="删除行" shortcut={shortcutLabel('deleteRow')} onRun={() => run(() => focusTarget().deleteRow().run())} />
-                  <MenuButton label="删除表格" shortcut={shortcutLabel('deleteTable')} danger onRun={() => run(() => focusTarget().deleteTable().run())} />
-                </MenuGroup>
-              ) : null}
               {target.type === 'image' ? (
                 <MenuGroup label="图片操作">
                   <MenuButton label="替换" shortcut={shortcutLabel('replaceImage')} onRun={() => run(() => onReplaceImage(target.pos))} />
@@ -563,6 +610,13 @@ export function BlockContextToolbar({
           <InlineButton active={editor.isActive('strike')} label="删除线" shortcut={shortcutLabel('strike')} onRun={() => editor.chain().focus().toggleStrike().run()} />
           <InlineButton active={editor.isActive('link')} label="链接" shortcut={shortcutLabel('link')} onRun={onSetLink} />
         </div>
+      ) : null}
+      {tablePicker ? (
+        <TableSizePicker
+          position={{ top: tablePicker.top, left: tablePicker.left }}
+          onCancel={() => setTablePicker(undefined)}
+          onInsert={insertSelectedTable}
+        />
       ) : null}
     </div>
   );
@@ -812,6 +866,7 @@ interface ShortcutActions {
   onEditImageCaption: (position: number) => void;
   onInsertAttachment: (position: number) => void;
   onInsertMermaid: (position: number) => void;
+  onInsertTable: (position: number) => void;
 }
 
 function runShortcutAction(
@@ -829,6 +884,7 @@ function runShortcutAction(
     onEditImageCaption,
     onInsertAttachment,
     onInsertMermaid,
+    onInsertTable,
   } = actions;
   const focusBlock = () => editor.chain().focus().setTextSelection(block.selectionPos);
   const insert = (content: Record<string, unknown>) => (
@@ -879,7 +935,8 @@ function runShortcutAction(
     case 'horizontalRule':
       return insert({ type: 'horizontalRule' });
     case 'table':
-      return insert(createTableContent());
+      onInsertTable(block.selectionPos);
+      return true;
     case 'image':
       onInsertImage(block.insertionPos);
       return true;
@@ -982,17 +1039,4 @@ function runShortcutAction(
 
 function isMacPlatform() {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-}
-
-function createTableContent() {
-  const cell = () => ({ type: 'tableCell', content: [{ type: 'paragraph' }] });
-  const headerCell = () => ({ type: 'tableHeader', content: [{ type: 'paragraph' }] });
-  return {
-    type: 'table',
-    content: [
-      { type: 'tableRow', content: [headerCell(), headerCell(), headerCell()] },
-      { type: 'tableRow', content: [cell(), cell(), cell()] },
-      { type: 'tableRow', content: [cell(), cell(), cell()] },
-    ],
-  };
 }

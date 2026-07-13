@@ -40,7 +40,13 @@ export function createDocumentSchemaExtensions() {
         ];
       },
     }),
-    Table.configure({ resizable: false }),
+    Table.configure({
+      resizable: true,
+      handleWidth: 6,
+      cellMinWidth: 80,
+      lastColumnResizable: true,
+      allowTableNodeSelection: true,
+    }),
     TableRow,
     TableHeader,
     TableCell,

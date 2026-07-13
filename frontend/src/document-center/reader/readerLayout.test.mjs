@@ -68,3 +68,14 @@ test('提示块和图片在编辑态复用阅读态视觉语义', () => {
   assert.match(schemaSource, /class: 'document-image'/);
   assert.match(schemaSource, /figcaption/);
 });
+
+test('表格开启列宽拖动并提供清晰的编辑反馈', () => {
+  assert.match(schemaSource, /resizable: true/);
+  assert.match(schemaSource, /handleWidth: 6/);
+  assert.match(schemaSource, /cellMinWidth: 80/);
+  assert.match(schemaSource, /lastColumnResizable: true/);
+  assert.match(schemaSource, /allowTableNodeSelection: true/);
+  assert.match(globalStyles, /\.column-resize-handle/);
+  assert.match(globalStyles, /\.resize-cursor/);
+  assert.match(globalStyles, /\.selectedCell::after/);
+});

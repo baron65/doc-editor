@@ -9,7 +9,7 @@ export const CALLOUT_KIND_OPTIONS: Array<{ value: CalloutKind; label: string }> 
 
 export function getContextualActionLabels(active: { table: boolean; image: boolean }) {
   return [
-    ...(active.table ? ['后插入列', '删除列', '后插入行', '删除行', '删除表格'] : []),
+    ...(active.table ? ['删除表格'] : []),
     ...(active.image ? ['替换图片', '替代文本', '图片说明'] : []),
   ];
 }

@@ -16,6 +16,7 @@ import { getPublishActionPresentation } from './editorPublishState';
 import { isDocumentApiError } from '@/services/documentApiError';
 import { validateUploadFile } from './uploadValidation';
 import { BlockContextToolbar } from './BlockContextToolbar';
+import { TableContextToolbar } from './TableContextToolbar';
 import { useAppDialog } from '@/components/app-dialog/AppDialog';
 import { normalizeMermaidCodeBlocks } from '../content/mermaidContent';
 
@@ -54,7 +55,7 @@ export function DocumentEditorShell({ document, onPendingChange, onDocumentChang
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const { prompt, dialog } = useAppDialog();
+  const { confirm, prompt, dialog } = useAppDialog();
 
   useEffect(() => {
     onDocumentChangeRef.current = onDocumentChange;
@@ -588,6 +589,16 @@ export function DocumentEditorShell({ document, onPendingChange, onDocumentChang
             attachmentInputRef.current?.click();
           }}
           onInsertMermaid={insertMermaid}
+        />
+        <TableContextToolbar
+          editor={editor}
+          disabled={busy || previewOpen}
+          onConfirmDeleteTable={() => confirm({
+            title: '删除表格',
+            description: '删除后表格及其中内容将从当前草稿移除。',
+            confirmText: '删除表格',
+            danger: true,
+          })}
         />
         <input
           ref={imageInputRef}

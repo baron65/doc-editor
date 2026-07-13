@@ -11,6 +11,7 @@ const blockToolbarSource = readFileSync(new URL('./BlockContextToolbar.tsx', imp
 const blockHighlightSource = readFileSync(new URL('./BlockHighlightExtension.ts', import.meta.url), 'utf8');
 const documentExtensionsSource = readFileSync(new URL('./documentExtensions.ts', import.meta.url), 'utf8');
 const globalCssSource = readFileSync(new URL('../../global.css', import.meta.url), 'utf8');
+const tablePickerSource = readFileSync(new URL('./TableSizePicker.tsx', import.meta.url), 'utf8');
 
 test('用户视角预览使用可见的视口弹层', () => {
   assert.match(editorSource, /role="dialog"/);
@@ -133,4 +134,19 @@ test('块菜单补齐任务清单、字号、下划线和删除线工具', () =>
   assert.match(blockToolbarSource, /fontSize/);
   assert.match(blockToolbarSource, /toggleUnderline/);
   assert.match(blockToolbarSource, /toggleStrike/);
+});
+
+test('表格入口使用尺寸选择器且块菜单不再提供行列增删', () => {
+  assert.match(blockToolbarSource, /TableSizePicker/);
+  assert.match(blockToolbarSource, /insertTable\(\{ rows, cols: columns, withHeaderRow: true \}\)/);
+  assert.match(tablePickerSource, /表格尺寸选择/);
+  for (const label of ['插入列', '删除列', '插入行', '删除行']) {
+    assert.doesNotMatch(blockToolbarSource, new RegExp(`label="${label}"`));
+  }
+});
+
+test('点击表格块句柄时建立整表节点选择', () => {
+  assert.match(blockToolbarSource, /target\?\.type === 'table'/);
+  assert.match(blockToolbarSource, /setNodeSelection\(target\.pos\)/);
+  assert.match(documentExtensionsSource, /TableKeyboardExtension/);
 });
