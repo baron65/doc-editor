@@ -8,11 +8,20 @@ export const SAFE_TEXT_COLORS = [
   { label: '紫色', value: '#9333ea' },
 ] as const;
 
+export const SAFE_FONT_SIZES = [
+  { label: '小号', value: '12px' },
+  { label: '正文', value: '14px' },
+  { label: '中号', value: '16px' },
+  { label: '大号', value: '18px' },
+  { label: '特大', value: '20px' },
+] as const;
+
 export type BlockTextAlign = 'left' | 'center' | 'right' | 'justify';
 
 const SAFE_TEXT_COLOR_VALUES = new Set<string>(
   SAFE_TEXT_COLORS.flatMap(({ value }) => value ? [value] : []),
 );
+const SAFE_FONT_SIZE_VALUES = new Set<string>(SAFE_FONT_SIZES.map(({ value }) => value));
 
 export function normalizeBlockTextAlign(value: unknown): BlockTextAlign {
   return ['left', 'center', 'right', 'justify'].includes(String(value))
@@ -30,6 +39,10 @@ export function normalizeBlockIndent(value: unknown) {
 
 export function normalizeTextColor(value: unknown): string | null {
   return typeof value === 'string' && SAFE_TEXT_COLOR_VALUES.has(value) ? value : null;
+}
+
+export function normalizeFontSize(value: unknown): string | null {
+  return typeof value === 'string' && SAFE_FONT_SIZE_VALUES.has(value) ? value : null;
 }
 
 export function buildBlockTextStyle(attrs?: Record<string, unknown>) {

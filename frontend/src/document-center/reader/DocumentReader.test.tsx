@@ -224,3 +224,31 @@ test('Reader 只渲染安全的对齐缩进和文本颜色', () => {
   assert.match(html, /margin-left:48px/);
   assert.match(html, /color:#2563eb/);
 });
+
+test('Reader 只渲染安全字号', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: '18',
+        title: '字号文档',
+        content: {
+          type: 'doc',
+          content: [{
+            type: 'paragraph',
+            content: [{
+              type: 'text',
+              text: '安全字号',
+              marks: [{ type: 'textStyle', attrs: { fontSize: '18px' } }],
+            }, {
+              type: 'text',
+              text: '危险字号',
+              marks: [{ type: 'textStyle', attrs: { fontSize: 'calc(100vw)' } }],
+            }],
+          }],
+        },
+      }}
+    />,
+  );
+  assert.match(html, /font-size:18px/);
+  assert.doesNotMatch(html, /calc\(100vw\)/);
+});

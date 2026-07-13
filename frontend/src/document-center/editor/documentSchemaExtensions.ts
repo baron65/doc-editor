@@ -1,4 +1,5 @@
 import Image from '@tiptap/extension-image';
+import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import StarterKit from '@tiptap/starter-kit';
 import { AttachmentExtension } from '../attachment/AttachmentExtension';
@@ -29,6 +30,8 @@ export function createDocumentSchemaExtensions() {
     TableRow,
     TableHeader,
     TableCell,
+    TaskList,
+    TaskItem.configure({ nested: true }),
     AttachmentExtension,
     CalloutExtension,
     MermaidExtension,

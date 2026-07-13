@@ -45,6 +45,31 @@ class DocumentContentAbilityTest {
     }
 
     @Test
+    void acceptsTextColorAndFontSizeAsIndependentTextStyleAttributes() {
+        DocumentContentAbility ability = new DocumentContentAbility();
+        String content = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":["
+                + "{\"type\":\"text\",\"text\":\"蓝色\",\"marks\":[{\"type\":\"textStyle\","
+                + "\"attrs\":{\"color\":\"#2563eb\",\"fontSize\":null}}]},"
+                + "{\"type\":\"text\",\"text\":\"大字\",\"marks\":[{\"type\":\"textStyle\","
+                + "\"attrs\":{\"color\":null,\"fontSize\":\"18px\"}}]}]}]}";
+
+        assertThat(ability.validateDraftContent(1, content).isValid()).isTrue();
+    }
+
+    @Test
+    void rejectsUnsupportedFontSize() {
+        DocumentContentAbility ability = new DocumentContentAbility();
+        String content = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{"
+                + "\"type\":\"text\",\"text\":\"危险字号\",\"marks\":[{\"type\":\"textStyle\","
+                + "\"attrs\":{\"fontSize\":\"calc(100vw)\"}}]}]}]}";
+
+        ContentValidationResultBO result = ability.validateDraftContent(1, content);
+
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getReason()).contains("font size");
+    }
+
+    @Test
     void rejectsUnsafeAlignmentIndentAndTextColor() {
         DocumentContentAbility ability = new DocumentContentAbility();
         String unsafeAlignment = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\","

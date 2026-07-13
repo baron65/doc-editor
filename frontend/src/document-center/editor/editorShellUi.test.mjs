@@ -107,18 +107,30 @@ test('气泡采用窄宽度并优先向正文外侧展开', () => {
   assert.match(blockToolbarSource, /left-9/);
 });
 
-test('列表引用代码使用语义图标并提供格式二级菜单', () => {
+test('列表引用代码使用语义图标并提供 hover 级联格式菜单', () => {
   assert.match(blockToolbarSource, /BlockToolIcon/);
   assert.match(blockToolbarSource, /bulletList/);
   assert.match(blockToolbarSource, /orderedList/);
   assert.match(blockToolbarSource, /blockquote/);
-  assert.match(blockToolbarSource, /menuView === 'alignment'/);
-  assert.match(blockToolbarSource, /menuView === 'color'/);
+  assert.match(blockToolbarSource, /cascadeMenu/);
+  assert.match(blockToolbarSource, /onMouseOver/);
+  assert.match(blockToolbarSource, /position: 'fixed'/);
+  assert.doesNotMatch(blockToolbarSource, /menuView !== 'main'/);
+  assert.doesNotMatch(blockToolbarSource, />←</);
 });
 
 test('块菜单支持复制和删除精确节点', () => {
-  assert.match(blockToolbarSource, /duplicateTargetNode/);
+  assert.match(blockToolbarSource, /copyTargetNode/);
+  assert.match(blockToolbarSource, /navigator\.clipboard\.writeText/);
+  assert.doesNotMatch(blockToolbarSource, /insertContentAt\(target\.end, target\.node\.toJSON\(\)\)/);
   assert.match(blockToolbarSource, /deleteTargetNode/);
   assert.match(blockToolbarSource, /target\.node\.toJSON\(\)/);
   assert.match(blockToolbarSource, /from: target\.pos, to: target\.end/);
+});
+
+test('块菜单补齐任务清单、字号、下划线和删除线工具', () => {
+  assert.match(blockToolbarSource, /toggleTaskList/);
+  assert.match(blockToolbarSource, /fontSize/);
+  assert.match(blockToolbarSource, /toggleUnderline/);
+  assert.match(blockToolbarSource, /toggleStrike/);
 });

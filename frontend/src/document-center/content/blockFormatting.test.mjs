@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   SAFE_TEXT_COLORS,
+  SAFE_FONT_SIZES,
   buildBlockTextStyle,
   normalizeBlockIndent,
   normalizeBlockTextAlign,
+  normalizeFontSize,
   normalizeTextColor,
 } from './blockFormatting.ts';
 
@@ -21,6 +23,13 @@ test('文本颜色只接受固定安全色板', () => {
   assert.equal(normalizeTextColor('#2563eb'), '#2563eb');
   assert.equal(normalizeTextColor('red'), null);
   assert.equal(normalizeTextColor('url(javascript:alert(1))'), null);
+});
+
+test('字号只接受固定安全字号', () => {
+  assert.equal(SAFE_FONT_SIZES.length, 5);
+  assert.equal(normalizeFontSize('16px'), '16px');
+  assert.equal(normalizeFontSize('13px'), null);
+  assert.equal(normalizeFontSize('expression(alert(1))'), null);
 });
 
 test('Reader 样式只由规范化属性生成', () => {

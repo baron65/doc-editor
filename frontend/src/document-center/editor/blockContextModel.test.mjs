@@ -6,6 +6,7 @@ import {
   getBlockMenuSide,
   getDocumentBlockTextRange,
   resolveDocumentBlockTarget,
+  resolveFormattableTextBlockTarget,
 } from './blockContextModel.ts';
 
 const schema = new Schema({
@@ -19,6 +20,8 @@ const schema = new Schema({
     },
     bulletList: { group: 'block', content: 'listItem+' },
     listItem: { content: 'paragraph block*' },
+    taskList: { group: 'block', content: 'taskItem+' },
+    taskItem: { content: 'paragraph block*', attrs: { checked: { default: false } } },
     text: { group: 'inline' },
   },
 });
@@ -31,8 +34,23 @@ test('非空块显示当前块类型', () => {
   assert.deepEqual(getBlockHandlePresentation('paragraph', false), { icon: 'T', label: '正文' });
   assert.deepEqual(getBlockHandlePresentation('heading', false, { level: 2 }), { icon: 'H2', label: '二级标题' });
   assert.deepEqual(getBlockHandlePresentation('bulletList', false), { icon: '•', label: '无序列表' });
+  assert.deepEqual(getBlockHandlePresentation('taskList', false), { icon: '☑', label: '任务清单' });
   assert.deepEqual(getBlockHandlePresentation('codeBlock', false), { icon: '{}', label: '代码块' });
   assert.deepEqual(getBlockHandlePresentation('table', false), { icon: '▦', label: '表格' });
+});
+
+test('任务清单中鼠标所在行解析为对应任务项', () => {
+  const firstItem = schema.node('taskItem', { checked: false }, schema.node('paragraph', null, schema.text('第一项')));
+  const secondItem = schema.node('taskItem', { checked: true }, schema.node('paragraph', null, schema.text('第二项')));
+  const list = schema.node('taskList', null, [firstItem, secondItem]);
+  const doc = schema.node('doc', null, list);
+  const secondItemStart = 1 + firstItem.nodeSize;
+
+  const target = resolveDocumentBlockTarget(doc, secondItemStart + 3);
+
+  assert.equal(target?.pos, secondItemStart);
+  assert.equal(target?.end, secondItemStart + secondItem.nodeSize);
+  assert.equal(target?.presentationType, 'taskList');
 });
 
 test('标题手柄支持 H1 到 H5 的当前状态', () => {
@@ -80,6 +98,21 @@ test('列表中鼠标所在行解析为对应列表项而不是整个列表', ()
     from: secondItemStart + 2,
     to: secondItemStart + secondItem.nodeSize - 2,
   });
+  const textBlock = resolveFormattableTextBlockTarget(target);
+  assert.equal(textBlock?.pos, secondItemStart + 1);
+  assert.equal(textBlock?.node.type.name, 'paragraph');
+  assert.equal(textBlock?.node.textContent, '第二项');
+});
+
+test('普通段落自身就是可设置缩进和对齐的文本块', () => {
+  const paragraph = schema.node('paragraph', null, schema.text('正文'));
+  const doc = schema.node('doc', null, paragraph);
+  const target = resolveDocumentBlockTarget(doc, 2);
+
+  const textBlock = resolveFormattableTextBlockTarget(target);
+
+  assert.equal(textBlock?.pos, 0);
+  assert.equal(textBlock?.node, paragraph);
 });
 
 test('段落文本范围不包含节点边界', () => {

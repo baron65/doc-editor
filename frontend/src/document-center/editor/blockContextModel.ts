@@ -14,10 +14,17 @@ export interface DocumentBlockTarget {
   node: ProseMirrorNode;
 }
 
+export interface FormattableTextBlockTarget {
+  pos: number;
+  end: number;
+  node: ProseMirrorNode;
+}
+
 const BLOCK_PRESENTATIONS: Record<string, BlockHandlePresentation> = {
   paragraph: { icon: 'T', label: '正文' },
   bulletList: { icon: '•', label: '无序列表' },
   orderedList: { icon: '1.', label: '编号列表' },
+  taskList: { icon: '☑', label: '任务清单' },
   blockquote: { icon: '“', label: '引用' },
   codeBlock: { icon: '{}', label: '代码块' },
   horizontalRule: { icon: '—', label: '分割线' },
@@ -33,7 +40,7 @@ export function getBlockHandlePresentation(
   empty: boolean,
   attrs?: Record<string, unknown>,
 ): BlockHandlePresentation {
-  if (empty && ['paragraph', 'bulletList', 'orderedList'].includes(nodeType)) {
+  if (empty && ['paragraph', 'bulletList', 'orderedList', 'taskList'].includes(nodeType)) {
     return { icon: '+', label: '添加内容' };
   }
   if (nodeType === 'heading') {
@@ -53,7 +60,7 @@ export function resolveDocumentBlockTarget(
 
   for (let depth = resolved.depth; depth >= 1; depth -= 1) {
     const node = resolved.node(depth);
-    if (node.type.name !== 'listItem') {
+    if (!['listItem', 'taskItem'].includes(node.type.name)) {
       continue;
     }
     const blockPos = resolved.before(depth);
@@ -130,6 +137,27 @@ export function getDocumentBlockTextRange(target?: DocumentBlockTarget) {
     return false;
   });
   return from === undefined || to === undefined ? undefined : { from, to };
+}
+
+export function resolveFormattableTextBlockTarget(
+  target?: DocumentBlockTarget,
+): FormattableTextBlockTarget | undefined {
+  if (!target) {
+    return undefined;
+  }
+  if (target.node.isTextblock && ['paragraph', 'heading'].includes(target.node.type.name)) {
+    return { pos: target.pos, end: target.end, node: target.node };
+  }
+  let result: FormattableTextBlockTarget | undefined;
+  target.node.descendants((node, relativePos) => {
+    if (result || !node.isTextblock || !['paragraph', 'heading'].includes(node.type.name)) {
+      return !result;
+    }
+    const pos = target.pos + relativePos + 1;
+    result = { pos, end: pos + node.nodeSize, node };
+    return false;
+  });
+  return result;
 }
 
 export function getBlockMenuSide(

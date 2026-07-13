@@ -3,6 +3,7 @@ import {
   buildBlockTextStyle,
   normalizeBlockIndent,
   normalizeBlockTextAlign,
+  normalizeFontSize,
   normalizeTextColor,
 } from '../content/blockFormatting';
 
@@ -11,6 +12,8 @@ declare module '@tiptap/core' {
     blockFormatting: {
       setTextColor: (color: string) => ReturnType;
       unsetTextColor: () => ReturnType;
+      setFontSize: (fontSize: string) => ReturnType;
+      unsetFontSize: () => ReturnType;
     };
   }
 }
@@ -29,11 +32,19 @@ const TextColorMark = Mark.create({
           return safeColor ? { 'data-text-color': safeColor, style: `color: ${safeColor}` } : {};
         },
       },
+      fontSize: {
+        default: null,
+        parseHTML: (element) => normalizeFontSize(element.getAttribute('data-font-size') ?? element.style.fontSize),
+        renderHTML: ({ fontSize }) => {
+          const safeFontSize = normalizeFontSize(fontSize);
+          return safeFontSize ? { 'data-font-size': safeFontSize, style: `font-size: ${safeFontSize}` } : {};
+        },
+      },
     };
   },
 
   parseHTML() {
-    return [{ tag: 'span[data-text-color]' }, { style: 'color' }];
+    return [{ tag: 'span[data-text-color]' }, { tag: 'span[data-font-size]' }, { style: 'color' }, { style: 'font-size' }];
   },
 
   renderHTML({ HTMLAttributes }) {
@@ -47,6 +58,11 @@ const TextColorMark = Mark.create({
         return Boolean(safeColor) && commands.setMark(this.name, { color: safeColor });
       },
       unsetTextColor: () => ({ commands }) => commands.unsetMark(this.name),
+      setFontSize: (fontSize) => ({ commands }) => {
+        const safeFontSize = normalizeFontSize(fontSize);
+        return Boolean(safeFontSize) && commands.setMark(this.name, { fontSize: safeFontSize });
+      },
+      unsetFontSize: () => ({ commands }) => commands.unsetMark(this.name),
     };
   },
 });

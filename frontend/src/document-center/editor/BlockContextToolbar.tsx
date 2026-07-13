@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react';
 import type { Editor } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { EditorContent } from '@tiptap/react';
@@ -7,6 +13,7 @@ import {
   getBlockMenuSide,
   getDocumentBlockTextRange,
   resolveDocumentBlockTarget,
+  resolveFormattableTextBlockTarget,
   type DocumentBlockTarget,
 } from './blockContextModel';
 import {
@@ -17,7 +24,12 @@ import {
 } from './blockShortcutModel';
 import type { CalloutKind } from '../callout/CalloutExtension';
 import { blockHighlightPluginKey } from './BlockHighlightExtension';
-import { SAFE_TEXT_COLORS, normalizeBlockIndent, type BlockTextAlign } from '../content/blockFormatting';
+import {
+  SAFE_FONT_SIZES,
+  SAFE_TEXT_COLORS,
+  normalizeBlockIndent,
+  type BlockTextAlign,
+} from '../content/blockFormatting';
 
 interface BlockContextToolbarProps {
   editor: Editor | null;
@@ -46,7 +58,13 @@ interface BlockTarget {
   handleViewportLeft: number;
 }
 
-type MenuView = 'main' | 'alignment' | 'color';
+type CascadeMenuView = 'alignment' | 'color' | 'fontSize';
+
+interface CascadeMenuState {
+  view: CascadeMenuView;
+  top: number;
+  left: number;
+}
 
 export function BlockContextToolbar({
   editor,
@@ -62,7 +80,7 @@ export function BlockContextToolbar({
 }: BlockContextToolbarProps) {
   const [target, setTarget] = useState<BlockTarget>();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuView, setMenuView] = useState<MenuView>('main');
+  const [cascadeMenu, setCascadeMenu] = useState<CascadeMenuState>();
   const [selectionMenu, setSelectionMenu] = useState<{ top: number; left: number }>();
   const closeMenuTimerRef = useRef<number>();
   const isMac = isMacPlatform();
@@ -170,6 +188,7 @@ export function BlockContextToolbar({
     closeMenuTimerRef.current = window.setTimeout(() => {
       clearTargetHighlight();
       setMenuOpen(false);
+      setCascadeMenu(undefined);
       closeMenuTimerRef.current = undefined;
     }, 120);
   };
@@ -204,6 +223,7 @@ export function BlockContextToolbar({
     action();
     cancelScheduledClose();
     setMenuOpen(false);
+    setCascadeMenu(undefined);
     clearTargetHighlight();
   };
 
@@ -213,8 +233,23 @@ export function BlockContextToolbar({
     }
     cancelScheduledClose();
     highlightTarget();
-    if (!menuOpen) setMenuView('main');
+    if (!menuOpen) setCascadeMenu(undefined);
     setMenuOpen(true);
+  };
+
+  const openCascadeMenu = (
+    view: CascadeMenuView,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    cancelScheduledClose();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 208;
+    const estimatedHeight = view === 'alignment' ? 312 : 280;
+    setCascadeMenu({
+      view,
+      top: Math.max(8, Math.min(rect.top, window.innerHeight - estimatedHeight - 8)),
+      left: Math.max(8, Math.min(rect.right + 6, window.innerWidth - width - 8)),
+    });
   };
 
   const handleMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -289,35 +324,60 @@ export function BlockContextToolbar({
     node: target.node,
   }) : undefined;
 
+  const updateTargetTextBlockAttributes = (attrs: Record<string, unknown>) => {
+    const textBlock = resolveFormattableTextBlockTarget(targetDocumentBlock());
+    if (!textBlock) return false;
+    const tr = editor.state.tr.setNodeMarkup(textBlock.pos, undefined, {
+      ...textBlock.node.attrs,
+      ...attrs,
+    }, textBlock.node.marks);
+    editor.view.dispatch(tr);
+    return true;
+  };
+
   const setTargetAlignment = (textAlign: BlockTextAlign) => {
-    if (!target || !['paragraph', 'heading'].includes(target.type)) return;
-    run(() => focusTarget().updateAttributes(target.type, { textAlign }).run());
+    if (!target) return;
+    run(() => {
+      updateTargetTextBlockAttributes({ textAlign });
+    });
   };
 
   const changeTargetIndent = (delta: number) => {
     if (!target) return;
-    if (['bulletList', 'orderedList'].includes(target.type)) {
-      run(() => delta > 0 ? focusTarget().sinkListItem('listItem').run() : focusTarget().liftListItem('listItem').run());
+    if (['bulletList', 'orderedList', 'taskList'].includes(target.type)) {
+      const itemType = target.type === 'taskList' ? 'taskItem' : 'listItem';
+      run(() => delta > 0 ? focusTarget().sinkListItem(itemType).run() : focusTarget().liftListItem(itemType).run());
       return;
     }
-    if (!['paragraph', 'heading'].includes(target.type)) return;
-    const indent = normalizeBlockIndent(Number(target.attrs.indent ?? 0) + delta);
-    run(() => focusTarget().updateAttributes(target.type, { indent }).run());
+    const textBlock = resolveFormattableTextBlockTarget(targetDocumentBlock());
+    if (!textBlock) return;
+    const indent = normalizeBlockIndent(Number(textBlock.node.attrs.indent ?? 0) + delta);
+    run(() => {
+      updateTargetTextBlockAttributes({ indent });
+    });
   };
 
   const applyTargetColor = (color: string | null) => {
     const range = getDocumentBlockTextRange(targetDocumentBlock());
     if (!range || range.from === range.to) return;
     run(() => {
-      const chain = editor.chain().focus().setTextSelection(range);
-      if (color) chain.setTextColor(color).run();
-      else chain.unsetTextColor().run();
+      updateTextStyleMark(editor, range, { color });
     });
   };
 
-  const duplicateTargetNode = () => {
+  const applyTargetFontSize = (fontSize: string) => {
+    const range = getDocumentBlockTextRange(targetDocumentBlock());
+    if (!range || range.from === range.to) return;
+    run(() => {
+      updateTextStyleMark(editor, range, { fontSize });
+    });
+  };
+
+  const copyTargetNode = () => {
     if (!target) return;
-    run(() => editor.chain().focus().insertContentAt(target.end, target.node.toJSON()).run());
+    run(() => {
+      void navigator.clipboard.writeText(JSON.stringify(target.node.toJSON()));
+    });
   };
 
   const deleteTargetNode = () => {
@@ -368,29 +428,8 @@ export function BlockContextToolbar({
               style={{ top: menuOffsetTop }}
               role="menu"
               aria-label="块工具箱"
+              onMouseEnter={cancelScheduledClose}
             >
-              {menuView !== 'main' ? (
-                <button className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-gray-600 hover:bg-gray-50" type="button" onClick={() => setMenuView('main')}>
-                  <span aria-hidden="true">←</span>{menuView === 'alignment' ? '缩进和对齐' : '文字颜色'}
-                </button>
-              ) : null}
-              {menuView === 'alignment' ? (
-                <MenuGroup label="对齐方式">
-                  {(['left', 'center', 'right', 'justify'] as BlockTextAlign[]).map((align) => (
-                    <MenuButton key={align} icon={<BlockToolIcon type={`align-${align}`} />} label={alignmentLabel(align)} shortcut={shortcutLabel(alignmentShortcutName(align))} onRun={() => setTargetAlignment(align)} />
-                  ))}
-                  <MenuButton icon={<BlockToolIcon type="indent-decrease" />} label="减少缩进" shortcut={shortcutLabel('indentDecrease')} onRun={() => changeTargetIndent(-1)} />
-                  <MenuButton icon={<BlockToolIcon type="indent-increase" />} label="增加缩进" shortcut={shortcutLabel('indentIncrease')} onRun={() => changeTargetIndent(1)} />
-                </MenuGroup>
-              ) : null}
-              {menuView === 'color' ? (
-                <MenuGroup label="安全色板">
-                  {SAFE_TEXT_COLORS.map((color) => (
-                    <MenuButton key={color.value ?? 'default'} icon={<ColorSwatch color={color.value} />} label={color.label} shortcut={shortcutLabel(colorShortcutName(color.value))} onRun={() => applyTargetColor(color.value)} />
-                  ))}
-                </MenuGroup>
-              ) : null}
-              {menuView === 'main' ? <>
               <MenuGroup compact label="转换为">
                 <MenuButton
                   compact
@@ -413,12 +452,14 @@ export function BlockContextToolbar({
                 ))}
                 <MenuButton compact active={target.type === 'bulletList'} icon={<BlockToolIcon type="bullet-list" />} label="列表" shortcut={shortcutLabel('bulletList')} onRun={() => run(() => focusTarget().toggleBulletList().run())} />
                 <MenuButton compact active={target.type === 'orderedList'} icon={<BlockToolIcon type="ordered-list" />} label="编号" shortcut={shortcutLabel('orderedList')} onRun={() => run(() => focusTarget().toggleOrderedList().run())} />
+                <MenuButton compact active={target.type === 'taskList'} icon={<BlockToolIcon type="task-list" />} label="任务" shortcut={shortcutLabel('taskList')} onRun={() => run(() => focusTarget().toggleTaskList().run())} />
                 <MenuButton compact active={target.type === 'blockquote'} icon={<BlockToolIcon type="quote" />} label="引用" shortcut={shortcutLabel('blockquote')} onRun={() => run(() => focusTarget().toggleBlockquote().run())} />
                 <MenuButton compact active={target.type === 'codeBlock'} icon={<BlockToolIcon type="code" />} label="代码块" shortcut={shortcutLabel('codeBlock')} onRun={() => run(() => onInsertCodeBlock(target.selectionPos))} />
               </MenuGroup>
               <MenuGroup label="格式">
-                <MenuButton icon={<BlockToolIcon type="align-left" />} label="缩进和对齐" shortcut={shortcutLabel('alignLeft')} onRun={() => setMenuView('alignment')} />
-                <MenuButton icon={<BlockToolIcon type="color" />} label="文字颜色" shortcut={shortcutLabel('colorDefault')} onRun={() => setMenuView('color')} />
+                <MenuButton hasSubmenu icon={<BlockToolIcon type="align-left" />} label="缩进和对齐" shortcut={shortcutLabel('alignLeft')} onHover={(event) => openCascadeMenu('alignment', event)} onRun={() => undefined} />
+                <MenuButton hasSubmenu icon={<BlockToolIcon type="color" />} label="文字颜色" shortcut={shortcutLabel('colorDefault')} onHover={(event) => openCascadeMenu('color', event)} onRun={() => undefined} />
+                <MenuButton hasSubmenu icon={<BlockToolIcon type="font-size" />} label="字号" shortcut={shortcutLabel('fontSizeBody')} onHover={(event) => openCascadeMenu('fontSize', event)} onRun={() => undefined} />
               </MenuGroup>
               <MenuGroup label="插入">
                 <MenuButton label="分割线" shortcut={shortcutLabel('horizontalRule')} onRun={() => run(() => insertAfterTarget({ type: 'horizontalRule' }))} />
@@ -469,10 +510,43 @@ export function BlockContextToolbar({
                 </MenuGroup>
               ) : null}
               <MenuGroup label="节点操作">
-                <MenuButton icon={<BlockToolIcon type="copy" />} label="复制节点" shortcut={shortcutLabel('duplicateNode')} onRun={duplicateTargetNode} />
+                <MenuButton icon={<BlockToolIcon type="copy" />} label="复制节点" shortcut={shortcutLabel('duplicateNode')} onRun={copyTargetNode} />
                 <MenuButton icon={<BlockToolIcon type="delete" />} label="删除节点" shortcut={shortcutLabel('deleteNode')} danger onRun={deleteTargetNode} />
               </MenuGroup>
-              </> : null}
+            </div>
+          ) : null}
+          {menuOpen && cascadeMenu ? (
+            <div
+              className="z-50 w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-xl"
+              style={{ position: 'fixed', top: cascadeMenu.top, left: cascadeMenu.left }}
+              role="menu"
+              aria-label={cascadeMenuTitle(cascadeMenu.view)}
+              onMouseEnter={cancelScheduledClose}
+              onMouseLeave={scheduleMenuClose}
+            >
+              {cascadeMenu.view === 'alignment' ? (
+                <MenuGroup label="对齐方式">
+                  {(['left', 'center', 'right', 'justify'] as BlockTextAlign[]).map((align) => (
+                    <MenuButton key={align} icon={<BlockToolIcon type={`align-${align}`} />} label={alignmentLabel(align)} shortcut={shortcutLabel(alignmentShortcutName(align))} onRun={() => setTargetAlignment(align)} />
+                  ))}
+                  <MenuButton icon={<BlockToolIcon type="indent-decrease" />} label="减少缩进" shortcut={shortcutLabel('indentDecrease')} onRun={() => changeTargetIndent(-1)} />
+                  <MenuButton icon={<BlockToolIcon type="indent-increase" />} label="增加缩进" shortcut={shortcutLabel('indentIncrease')} onRun={() => changeTargetIndent(1)} />
+                </MenuGroup>
+              ) : null}
+              {cascadeMenu.view === 'color' ? (
+                <MenuGroup label="安全色板">
+                  {SAFE_TEXT_COLORS.map((color) => (
+                    <MenuButton key={color.value ?? 'default'} icon={<ColorSwatch color={color.value} />} label={color.label} shortcut={shortcutLabel(colorShortcutName(color.value))} onRun={() => applyTargetColor(color.value)} />
+                  ))}
+                </MenuGroup>
+              ) : null}
+              {cascadeMenu.view === 'fontSize' ? (
+                <MenuGroup label="字号">
+                  {SAFE_FONT_SIZES.map((fontSize) => (
+                    <MenuButton key={fontSize.value} label={fontSize.label} shortcut={shortcutLabel(fontSizeShortcutName(fontSize.value))} onRun={() => applyTargetFontSize(fontSize.value)} />
+                  ))}
+                </MenuGroup>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -486,6 +560,7 @@ export function BlockContextToolbar({
           <InlineButton active={editor.isActive('bold')} label="加粗" shortcut={shortcutLabel('bold')} onRun={() => editor.chain().focus().toggleBold().run()} />
           <InlineButton active={editor.isActive('italic')} label="斜体" shortcut={shortcutLabel('italic')} onRun={() => editor.chain().focus().toggleItalic().run()} />
           <InlineButton active={editor.isActive('underline')} label="下划线" shortcut={shortcutLabel('underline')} onRun={() => editor.chain().focus().toggleUnderline().run()} />
+          <InlineButton active={editor.isActive('strike')} label="删除线" shortcut={shortcutLabel('strike')} onRun={() => editor.chain().focus().toggleStrike().run()} />
           <InlineButton active={editor.isActive('link')} label="链接" shortcut={shortcutLabel('link')} onRun={onSetLink} />
         </div>
       ) : null}
@@ -517,6 +592,8 @@ function MenuButton({
   compact,
   active,
   danger,
+  hasSubmenu,
+  onHover,
   onRun,
 }: {
   label: string;
@@ -525,6 +602,8 @@ function MenuButton({
   compact?: boolean;
   active?: boolean;
   danger?: boolean;
+  hasSubmenu?: boolean;
+  onHover?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onRun: () => void;
 }) {
   return (
@@ -541,7 +620,8 @@ function MenuButton({
       type="button"
       role="menuitem"
       onMouseDown={(event) => event.preventDefault()}
-      onClick={onRun}
+      onMouseOver={onHover}
+      onClick={(event) => onHover ? onHover(event) : onRun()}
     >
       {compact ? (
         <>
@@ -551,7 +631,10 @@ function MenuButton({
       ) : (
         <>
           <span className="flex min-w-0 items-center gap-2">{icon ? <span className="shrink-0 text-gray-500">{icon}</span> : null}<span>{label}</span></span>
-          <kbd className="shrink-0 font-sans text-[11px] font-normal text-gray-400">{shortcut}</kbd>
+          <span className="flex shrink-0 items-center gap-2">
+            <kbd className="font-sans text-[11px] font-normal text-gray-400">{shortcut}</kbd>
+            {hasSubmenu ? <span aria-hidden="true" className="text-base text-gray-400">›</span> : null}
+          </span>
         </>
       )}
     </button>
@@ -565,12 +648,14 @@ function BlockToolIcon({ type }: { type: string }) {
     <svg {...common} aria-hidden="true">
       {type === 'bullet-list' ? <><circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />{lines}</> : null}
       {type === 'ordered-list' ? <><path d="M3 5h2v3M3 11h2l-2 3h2M3 17h2l-2 2h2" />{lines}</> : null}
+      {type === 'task-list' ? <><rect x="3" y="4" width="3" height="3" rx=".5" /><path d="m3.5 12 1 1 2-2M9 6h11M9 12h11M9 18h11" /><rect x="3" y="17" width="3" height="3" rx=".5" /></> : null}
       {type === 'quote' ? <path d="M5 7h5v5H6c0 3-1 4-3 5M14 7h5v5h-4c0 3-1 4-3 5" /> : null}
       {type === 'code' ? <path d="m8 5-4 7 4 7M16 5l4 7-4 7M14 3l-4 18" /> : null}
       {type.startsWith('align-') ? alignmentIcon(type.slice(6)) : null}
       {type === 'indent-increase' ? <>{lines}<path d="m3 9 3 3-3 3" /></> : null}
       {type === 'indent-decrease' ? <>{lines}<path d="m6 9-3 3 3 3" /></> : null}
       {type === 'color' ? <><path d="m5 19 7-14 7 14M8 14h8" /><path d="M4 22h16" stroke="#2563eb" strokeWidth="3" /></> : null}
+      {type === 'font-size' ? <><path d="M4 6h10M9 6v12M6 18h6M15 11h5M17.5 11v7M16 18h3" /></> : null}
       {type === 'copy' ? <><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></> : null}
       {type === 'delete' ? <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></> : null}
     </svg>
@@ -602,6 +687,24 @@ function colorShortcutName(color: string | null): BlockShortcutName {
     '#4b5563': 'colorGray', '#dc2626': 'colorRed', '#ea580c': 'colorOrange',
     '#16a34a': 'colorGreen', '#2563eb': 'colorBlue', '#9333ea': 'colorPurple',
   }[color ?? 'default'] ?? 'colorDefault') as BlockShortcutName;
+}
+
+function fontSizeShortcutName(fontSize: string): BlockShortcutName {
+  return ({
+    '12px': 'fontSizeSmall',
+    '14px': 'fontSizeBody',
+    '16px': 'fontSizeMedium',
+    '18px': 'fontSizeLarge',
+    '20px': 'fontSizeXLarge',
+  }[fontSize] ?? 'fontSizeBody') as BlockShortcutName;
+}
+
+function cascadeMenuTitle(menuView: CascadeMenuView) {
+  return {
+    alignment: '缩进和对齐',
+    color: '文字颜色',
+    fontSize: '字号',
+  }[menuView];
 }
 
 function InlineButton({
@@ -642,6 +745,61 @@ function calloutShortcutName(kind: CalloutKind): BlockShortcutName {
     success: 'calloutSuccess',
     danger: 'calloutDanger',
   }[kind] as BlockShortcutName;
+}
+
+function updateTextStyleMark(
+  editor: Editor,
+  range: { from: number; to: number },
+  patch: { color?: string | null; fontSize?: string | null },
+) {
+  const markType = editor.state.schema.marks.textStyle;
+  if (!markType) {
+    return false;
+  }
+  const tr = editor.state.tr;
+  editor.state.doc.nodesBetween(range.from, range.to, (node, pos) => {
+    if (!node.isText) {
+      return true;
+    }
+    const from = Math.max(range.from, pos);
+    const to = Math.min(range.to, pos + node.nodeSize);
+    const existing = node.marks.find((mark) => mark.type === markType);
+    const attrs = { ...(existing?.attrs ?? {}) };
+    Object.entries(patch).forEach(([key, value]) => {
+      if (value) {
+        attrs[key] = value;
+      } else {
+        delete attrs[key];
+      }
+    });
+    tr.removeMark(from, to, markType);
+    if (Object.keys(attrs).length) {
+      tr.addMark(from, to, markType.create(attrs));
+    }
+    return true;
+  });
+  if (tr.docChanged) {
+    editor.view.dispatch(tr);
+    return true;
+  }
+  return false;
+}
+
+function updateFormattableBlockAttributes(
+  editor: Editor,
+  block: DocumentBlockTarget,
+  attrs: Record<string, unknown>,
+) {
+  const textBlock = resolveFormattableTextBlockTarget(block);
+  if (!textBlock) {
+    return false;
+  }
+  const tr = editor.state.tr.setNodeMarkup(textBlock.pos, undefined, {
+    ...textBlock.node.attrs,
+    ...attrs,
+  }, textBlock.node.marks);
+  editor.view.dispatch(tr);
+  return true;
 }
 
 interface ShortcutActions {
@@ -694,6 +852,8 @@ function runShortcutAction(
       return editor.chain().focus().toggleItalic().run();
     case 'underline':
       return editor.chain().focus().toggleUnderline().run();
+    case 'strike':
+      return editor.chain().focus().toggleStrike().run();
     case 'link':
       onSetLink();
       return true;
@@ -709,6 +869,8 @@ function runShortcutAction(
       return focusBlock().toggleBulletList().run();
     case 'orderedList':
       return focusBlock().toggleOrderedList().run();
+    case 'taskList':
+      return focusBlock().toggleTaskList().run();
     case 'blockquote':
       return focusBlock().toggleBlockquote().run();
     case 'codeBlock':
@@ -761,20 +923,21 @@ function runShortcutAction(
     case 'alignCenter':
     case 'alignRight':
     case 'alignJustify': {
-      if (!['paragraph', 'heading'].includes(block.presentationType)) return false;
       const textAlign = { alignLeft: 'left', alignCenter: 'center', alignRight: 'right', alignJustify: 'justify' }[name];
-      return focusBlock().updateAttributes(block.presentationType, { textAlign }).run();
+      return updateFormattableBlockAttributes(editor, block, { textAlign });
     }
     case 'indentIncrease':
     case 'indentDecrease': {
       const delta = name === 'indentIncrease' ? 1 : -1;
-      if (['bulletList', 'orderedList'].includes(block.presentationType)) {
-        return delta > 0 ? focusBlock().sinkListItem('listItem').run() : focusBlock().liftListItem('listItem').run();
+      if (['bulletList', 'orderedList', 'taskList'].includes(block.presentationType)) {
+        const itemType = block.presentationType === 'taskList' ? 'taskItem' : 'listItem';
+        return delta > 0 ? focusBlock().sinkListItem(itemType).run() : focusBlock().liftListItem(itemType).run();
       }
-      if (!['paragraph', 'heading'].includes(block.presentationType)) return false;
-      return focusBlock().updateAttributes(block.presentationType, {
-        indent: normalizeBlockIndent(Number(block.node.attrs.indent ?? 0) + delta),
-      }).run();
+      const textBlock = resolveFormattableTextBlockTarget(block);
+      if (!textBlock) return false;
+      return updateFormattableBlockAttributes(editor, block, {
+        indent: normalizeBlockIndent(Number(textBlock.node.attrs.indent ?? 0) + delta),
+      });
     }
     case 'colorDefault':
     case 'colorGray':
@@ -789,11 +952,27 @@ function runShortcutAction(
         colorDefault: null, colorGray: '#4b5563', colorRed: '#dc2626', colorOrange: '#ea580c',
         colorGreen: '#16a34a', colorBlue: '#2563eb', colorPurple: '#9333ea',
       }[name];
-      const chain = editor.chain().focus().setTextSelection(range);
-      return color ? chain.setTextColor(color).run() : chain.unsetTextColor().run();
+      return updateTextStyleMark(editor, range, { color });
+    }
+    case 'fontSizeSmall':
+    case 'fontSizeBody':
+    case 'fontSizeMedium':
+    case 'fontSizeLarge':
+    case 'fontSizeXLarge': {
+      const range = getDocumentBlockTextRange(block);
+      if (!range || range.from === range.to) return false;
+      const fontSize = {
+        fontSizeSmall: '12px',
+        fontSizeBody: '14px',
+        fontSizeMedium: '16px',
+        fontSizeLarge: '18px',
+        fontSizeXLarge: '20px',
+      }[name];
+      return updateTextStyleMark(editor, range, { fontSize });
     }
     case 'duplicateNode':
-      return editor.chain().focus().insertContentAt(block.end, block.node.toJSON()).run();
+      void navigator.clipboard.writeText(JSON.stringify(block.node.toJSON()));
+      return true;
     case 'deleteNode':
       return editor.chain().focus().deleteRange({ from: block.pos, to: block.end }).run();
     default:

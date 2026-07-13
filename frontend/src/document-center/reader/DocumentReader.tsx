@@ -4,7 +4,7 @@ import type { DocumentContent } from '../../types/documentCenter';
 import { buildAssetUrl, formatFileSize, type AssetScope } from './assetPresentation';
 import { buildReaderContent, selectActiveHeadingId, type DocumentNavigationItem } from './readerModel';
 import { CodeBlock } from './CodeBlock';
-import { buildBlockTextStyle, normalizeTextColor } from '../content/blockFormatting';
+import { buildBlockTextStyle, normalizeFontSize, normalizeTextColor } from '../content/blockFormatting';
 import { extractDocumentText, isMermaidLanguage } from '../content/mermaidContent';
 
 export interface ReaderDocument {
@@ -164,6 +164,15 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
       return <ul key={key}>{renderChildren(node.content, documentId, assetScope)}</ul>;
     case 'orderedList':
       return <ol key={key}>{renderChildren(node.content, documentId, assetScope)}</ol>;
+    case 'taskList':
+      return <ul key={key} data-type="taskList">{renderChildren(node.content, documentId, assetScope)}</ul>;
+    case 'taskItem':
+      return (
+        <li key={key} className="flex gap-2" data-type="taskItem" data-checked={node.attrs?.checked === true}>
+          <input type="checkbox" checked={node.attrs?.checked === true} readOnly />
+          <div className="min-w-0 flex-1">{renderChildren(node.content, documentId, assetScope)}</div>
+        </li>
+      );
     case 'listItem':
       return <li key={key}>{renderInlineChildren(node.content, documentId, assetScope)}</li>;
     case 'blockquote':
@@ -228,6 +237,8 @@ function applyMarks(text: string, node: DocumentContent, key: number): ReactNode
         return <em key={key}>{current}</em>;
       case 'underline':
         return <u key={key}>{current}</u>;
+      case 'strike':
+        return <s key={key}>{current}</s>;
       case 'code':
         return <code key={key}>{current}</code>;
       case 'link': {
@@ -243,7 +254,8 @@ function applyMarks(text: string, node: DocumentContent, key: number): ReactNode
       }
       case 'textStyle': {
         const color = normalizeTextColor(mark.attrs?.color);
-        return color ? <span key={key} style={{ color }}>{current}</span> : current;
+        const fontSize = normalizeFontSize(mark.attrs?.fontSize);
+        return color || fontSize ? <span key={key} style={{ color: color ?? undefined, fontSize: fontSize ?? undefined }}>{current}</span> : current;
       }
       default:
         return current;
