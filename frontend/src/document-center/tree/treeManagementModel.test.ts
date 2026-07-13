@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { DocumentTreeNode } from '../../types/documentCenter';
-import { getDropDestination, getMoveTargetDirectories, getTargetAppendIndex } from './treeManagementModel';
+import {
+  getDropDestination,
+  getMoveTargetDirectories,
+  getRootDropDestination,
+  getTargetAppendIndex,
+} from './treeManagementModel';
 
 const tree: DocumentTreeNode[] = [
   {
@@ -60,5 +65,17 @@ test('drop on a document inserts before that document', () => {
   assert.deepEqual(getDropDestination(tree, tree[1], document), {
     targetParentId: '11',
     targetIndex: 0,
+  });
+});
+
+test('drop on root appends moving node at root level', () => {
+  const document = tree[0].children?.[0].children?.[0];
+  assert.deepEqual(getRootDropDestination(tree, document), {
+    targetParentId: '0',
+    targetIndex: 2,
+  });
+  assert.deepEqual(getRootDropDestination(tree, tree[1]), {
+    targetParentId: '0',
+    targetIndex: 1,
   });
 });

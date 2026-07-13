@@ -27,3 +27,9 @@ test('顶部新建固定在根节点且目录节点提供子节点新建入口',
   assert.match(treeSource, /新建子目录/);
   assert.match(treeSource, /isDirectory && onCreateChild/);
 });
+
+test('文档树提供根目录拖拽投放区', () => {
+  assert.match(treeSource, /getRootDropDestination/);
+  assert.match(treeSource, /handleRootDrop/);
+  assert.match(treeSource, /拖到此处移到根目录/);
+});

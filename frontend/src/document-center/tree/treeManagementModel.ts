@@ -70,6 +70,22 @@ export function getDropDestination(
   };
 }
 
+export function getRootDropDestination(
+  nodes: DocumentTreeNode[],
+  movingNode?: DocumentTreeNode,
+) {
+  if (!movingNode) {
+    return undefined;
+  }
+  if (!getMoveTargetDirectories(nodes, movingNode).some((target) => target.id === '0')) {
+    return undefined;
+  }
+  return {
+    targetParentId: '0',
+    targetIndex: getTargetAppendIndex(nodes, '0', movingNode),
+  };
+}
+
 function collectNodeIds(node: DocumentTreeNode): Set<string> {
   const ids = new Set<string>([node.id]);
   (node.children ?? []).forEach((child) => {

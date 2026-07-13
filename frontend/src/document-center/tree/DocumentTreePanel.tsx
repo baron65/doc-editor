@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import type { DocumentTreeNode } from '../../types/documentCenter';
 import { collectAncestorDirectoryIds, filterTreeByTitle } from './treeModel';
 import { getPublishStatePresentation } from './treePublishState';
-import { flattenTreeNodes, getDropDestination } from './treeManagementModel';
+import { flattenTreeNodes, getDropDestination, getRootDropDestination } from './treeManagementModel';
 
 interface DocumentTreePanelProps {
   nodes: DocumentTreeNode[];
@@ -88,6 +88,18 @@ export function DocumentTreePanel({
     }
   };
 
+  const handleRootDrop = (event: DragEvent) => {
+    event.preventDefault();
+    const movingNodeId = draggedNodeId ?? event.dataTransfer.getData('text/plain');
+    const movingNode = flattenTreeNodes(nodes).find((node) => node.id === movingNodeId);
+    const destination = getRootDropDestination(nodes, movingNode);
+    setDraggedNodeId(undefined);
+    setDropTargetNodeId(undefined);
+    if (movingNode && destination) {
+      onMoveNode?.(movingNode, destination);
+    }
+  };
+
   if (!nodes.length) {
     return <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">暂无文档节点</div>;
   }
@@ -105,6 +117,24 @@ export function DocumentTreePanel({
       ) : null}
       {filteredNodes.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 p-5 text-sm text-gray-500">未找到匹配文档</div>
+      ) : null}
+      {onMoveNode ? (
+        <div
+          className={[
+            'mb-2 rounded-md border border-dashed px-3 py-2 text-xs',
+            draggedNodeId ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-gray-200 bg-gray-50 text-gray-400',
+          ].join(' ')}
+          onDragOver={(event) => {
+            if (!draggedNodeId) {
+              return;
+            }
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+          }}
+          onDrop={handleRootDrop}
+        >
+          拖到此处移到根目录
+        </div>
       ) : null}
       <div className="space-y-1">
       {filteredNodes.map((node) => (
