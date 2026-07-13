@@ -21,10 +21,9 @@ test('正文卡片在小屏使用紧凑内边距', () => {
 });
 
 test('本页目录过长时在视口内独立滚动', () => {
-  assert.match(
-    readerSource,
-    /sticky top-(?:0|8)[^"\n]*max-h-\[calc\(100vh-4rem\)\][^"\n]*overflow-y-auto[^"\n]*xl:block/,
-  );
+  assert.match(readerSource, /sticky top-0 hidden w-52[^"\n]*overflow-y-auto[^"\n]*xl:block/);
+  assert.match(readerSource, /containedScroll \? 'max-h-full' : 'max-h-\[calc\(100vh-4rem\)\]'/);
+  assert.match(readerSource, /containedScroll \? 'h-full overflow-y-auto overscroll-contain' : ''/);
 });
 
 test('富文本 mark 包装元素保留列表 key', () => {

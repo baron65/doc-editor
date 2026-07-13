@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
-import { history, useRequest } from '@umijs/max';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { history, useParams, useRequest } from '@umijs/max';
+import { DocumentEditorShell } from '@/document-center/editor/DocumentEditorShell';
+import { shouldConfirmEditorNavigation } from '@/document-center/editor/editorNavigationGuard';
 import { DocumentTreePanel } from '@/document-center/tree/DocumentTreePanel';
 import {
   flattenTreeNodes,
@@ -10,12 +12,14 @@ import {
   createDirectory,
   createDocument,
   deleteNode,
+  getAdminDocument,
   getAdminTree,
   moveNode,
   passthroughRequestResult,
   renameDirectory,
 } from '@/services/documentCenter';
-import type { DocumentTree, DocumentTreeNode } from '@/types/documentCenter';
+import type { AdminDocumentDetail, DocumentTree, DocumentTreeNode } from '@/types/documentCenter';
+import { useAppDialog } from '@/components/app-dialog/AppDialog';
 
 type CreateKind = 'DOCUMENT' | 'DIRECTORY';
 
@@ -25,16 +29,27 @@ interface FeedbackState {
 }
 
 export default function AdminDocumentCenterPage() {
-  const { data: tree, loading, refresh, error: treeError } = useRequest(getAdminTree, {
+  const { documentId = '' } = useParams();
+  const treeRequest = useRequest(getAdminTree, {
     formatResult: passthroughRequestResult,
   });
-  const typedTree = tree as DocumentTree | undefined;
+  const detailRequest = useRequest(() => getAdminDocument(documentId), {
+    formatResult: passthroughRequestResult,
+    refreshDeps: [documentId],
+    ready: Boolean(documentId),
+  });
+  const typedTree = treeRequest.data as DocumentTree | undefined;
+  const document = detailRequest.data as AdminDocumentDetail | undefined;
+  const syncedDocumentIdRef = useRef('');
   const [selectedNode, setSelectedNode] = useState<DocumentTreeNode>();
   const [createKind, setCreateKind] = useState<CreateKind>();
   const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>();
   const [moveTargetParentId, setMoveTargetParentId] = useState('0');
+  const [hasPendingEditorWork, setHasPendingEditorWork] = useState(false);
+  const { confirm, prompt, dialog } = useAppDialog();
   const flatNodes = useMemo(() => flattenTreeNodes(typedTree?.nodes ?? []), [typedTree?.nodes]);
   const moveTargets = useMemo(
     () => getMoveTargetDirectories(typedTree?.nodes ?? [], selectedNode),
@@ -44,6 +59,29 @@ export default function AdminDocumentCenterPage() {
     () => getSiblingInfo(flatNodes, selectedNode),
     [flatNodes, selectedNode],
   );
+  const activeDocumentNode = useMemo(
+    () => flatNodes.find((node) => node.nodeType === 'DOCUMENT' && node.id === documentId),
+    [documentId, flatNodes],
+  );
+
+  useEffect(() => {
+    if (!documentId || !activeDocumentNode || syncedDocumentIdRef.current === documentId) {
+      return;
+    }
+    syncedDocumentIdRef.current = documentId;
+    setSelectedNode(activeDocumentNode);
+    setMoveTargetParentId(activeDocumentNode.parentId);
+  }, [activeDocumentNode, documentId]);
+
+  useEffect(() => {
+    if (documentId || treeRequest.loading) {
+      return;
+    }
+    const firstDocument = flatNodes.find((node) => node.nodeType === 'DOCUMENT');
+    if (firstDocument) {
+      history.replace(`/admin/document-center/${firstDocument.id}`);
+    }
+  }, [documentId, flatNodes, treeRequest.loading]);
 
   const getCreateParentId = () => {
     if (selectedNode?.nodeType === 'DIRECTORY') {
@@ -82,7 +120,7 @@ export default function AdminDocumentCenterPage() {
         createKind === 'DOCUMENT'
           ? await createDocument(getCreateParentId(), name, typedTree.treeRevision)
           : await createDirectory(getCreateParentId(), name, typedTree.treeRevision);
-      await refresh();
+      await treeRequest.refresh();
       setCreateKind(undefined);
       setCreateName('');
       setFeedback({
@@ -107,7 +145,13 @@ export default function AdminDocumentCenterPage() {
     if (!selectedNode || selectedNode.nodeType !== 'DIRECTORY' || !typedTree?.treeRevision) {
       return;
     }
-    const nextName = window.prompt('请输入新的目录名称', selectedNode.title);
+    const nextName = await prompt({
+      title: '重命名目录',
+      description: `请输入“${selectedNode.title}”的新名称。`,
+      initialValue: selectedNode.title,
+      confirmText: '保存名称',
+      validate: (value) => value.trim() ? undefined : '目录名称不能为空。',
+    });
     if (!nextName?.trim()) {
       return;
     }
@@ -117,34 +161,69 @@ export default function AdminDocumentCenterPage() {
         name: nextName.trim(),
         expectedTreeRevision: typedTree.treeRevision,
       });
-      await refresh();
+      await treeRequest.refresh();
       setFeedback({ type: 'success', message: '目录已重命名。' });
     } catch (error) {
       setFeedback({ type: 'error', message: getErrorMessage(error, '重命名目录失败。') });
     }
   };
 
-  const handleDeleteNode = async () => {
-    if (!selectedNode || !typedTree?.treeRevision) {
+  const deleteTreeNode = async (node: DocumentTreeNode) => {
+    if (
+      !typedTree?.treeRevision
+      || deleting
+      || (node.nodeType === 'DOCUMENT' && node.publishState !== 'DRAFT')
+    ) {
       return;
     }
-    const confirmed = window.confirm(
-      selectedNode.nodeType === 'DIRECTORY'
-        ? '只能删除空目录，确认删除？'
-        : '只能删除未发布文档，确认删除？',
-    );
+    const deletingActiveDocument = node.nodeType === 'DOCUMENT' && node.id === documentId;
+    const pendingWarning = deletingActiveDocument && hasPendingEditorWork
+      ? '当前草稿还有未保存或保存失败的内容，'
+      : '';
+    const confirmed = await confirm({
+      title: node.nodeType === 'DIRECTORY' ? '删除目录' : '删除草稿',
+      description: node.nodeType === 'DIRECTORY'
+        ? `只能删除空目录。确认永久删除目录“${node.title}”？`
+        : `${pendingWarning}确认永久删除草稿“${node.draftTitle ?? node.title}”？此操作不可恢复。`,
+      confirmText: '永久删除',
+      danger: true,
+    });
     if (!confirmed) {
       return;
     }
+    setDeleting(true);
     setFeedback(undefined);
     try {
-      await deleteNode(selectedNode.id, typedTree.treeRevision);
-      setSelectedNode(undefined);
-      await refresh();
-      setFeedback({ type: 'success', message: '节点已删除。' });
+      const nextDocument = flatNodes.find((item) => (
+        item.nodeType === 'DOCUMENT' && item.id !== node.id
+      ));
+      await deleteNode(node.id, typedTree.treeRevision);
+      await treeRequest.refresh();
+      if (deletingActiveDocument) {
+        syncedDocumentIdRef.current = '';
+        setSelectedNode(nextDocument);
+        history.replace(nextDocument
+          ? `/admin/document-center/${nextDocument.id}`
+          : '/admin/document-center');
+      } else if (selectedNode?.id === node.id) {
+        setSelectedNode(undefined);
+      }
+      setFeedback({ type: 'success', message: node.nodeType === 'DIRECTORY' ? '目录已删除。' : '草稿已删除。' });
     } catch (error) {
       setFeedback({ type: 'error', message: getErrorMessage(error, '删除节点失败。') });
+    } finally {
+      setDeleting(false);
     }
+  };
+
+  const handleDeleteNode = async () => {
+    if (selectedNode) {
+      await deleteTreeNode(selectedNode);
+    }
+  };
+
+  const handleDeleteDraft = async (node: DocumentTreeNode) => {
+    await deleteTreeNode(node);
   };
 
   const handleMoveSelected = async (direction: 'UP' | 'DOWN') => {
@@ -162,7 +241,7 @@ export default function AdminDocumentCenterPage() {
         targetIndex: nextIndex,
         expectedTreeRevision: typedTree.treeRevision,
       });
-      await refresh();
+      await treeRequest.refresh();
       setFeedback({ type: 'success', message: '节点顺序已更新。' });
     } catch (error) {
       setFeedback({ type: 'error', message: getErrorMessage(error, '移动节点失败。') });
@@ -181,7 +260,7 @@ export default function AdminDocumentCenterPage() {
         expectedTreeRevision: typedTree.treeRevision,
       });
       setSelectedNode({ ...selectedNode, parentId: moveTargetParentId });
-      await refresh();
+      await treeRequest.refresh();
       setFeedback({ type: 'success', message: '节点已移动到目标目录末尾。' });
     } catch (error) {
       setFeedback({ type: 'error', message: getErrorMessage(error, '跨目录移动失败。') });
@@ -203,10 +282,34 @@ export default function AdminDocumentCenterPage() {
       });
       setSelectedNode({ ...node, parentId: destination.targetParentId });
       setMoveTargetParentId(destination.targetParentId);
-      await refresh();
+      await treeRequest.refresh();
       setFeedback({ type: 'success', message: '拖拽移动已保存。' });
     } catch (error) {
       setFeedback({ type: 'error', message: getErrorMessage(error, '拖拽移动失败。') });
+    }
+  };
+
+  const handleSelectNode = async (node: DocumentTreeNode) => {
+    if (node.nodeType === 'DIRECTORY') {
+      setSelectedNode(node);
+      setMoveTargetParentId(node.parentId);
+      return;
+    }
+    if (
+      shouldConfirmEditorNavigation(hasPendingEditorWork, documentId, node.id)
+      && !await confirm({
+        title: '离开当前文档？',
+        description: '当前文档仍有未保存、保存失败或冲突内容，离开后这些内容可能丢失。',
+        confirmText: '确认离开',
+        danger: true,
+      })
+    ) {
+      return;
+    }
+    setSelectedNode(node);
+    setMoveTargetParentId(node.parentId);
+    if (node.id !== documentId) {
+      history.push(`/admin/document-center/${node.id}`);
     }
   };
 
@@ -216,7 +319,6 @@ export default function AdminDocumentCenterPage() {
         <div className="mb-6">
           <div className="mb-3 flex items-center justify-between">
             <h1 className="text-xl font-semibold text-gray-950">文档管理</h1>
-            <span className="text-xs text-gray-400">treeRevision {typedTree?.treeRevision ?? '-'}</span>
           </div>
           <div className="flex gap-2">
             <button
@@ -281,14 +383,14 @@ export default function AdminDocumentCenterPage() {
               </div>
             </div>
           )}
-          {treeError && (
+          {treeRequest.error && (
             <div className="mt-3 rounded-lg border border-red-100 bg-red-50 p-3 text-xs text-red-700">
               <div className="font-medium">文档树加载失败</div>
-              <div className="mt-1 break-words">{getErrorMessage(treeError, '请确认后端服务已启动后重试。')}</div>
+              <div className="mt-1 break-words">{getErrorMessage(treeRequest.error, '请确认后端服务已启动后重试。')}</div>
               <button
                 className="mt-2 rounded-md border border-red-200 bg-white px-2 py-1 text-red-700"
                 type="button"
-                onClick={() => void refresh()}
+                onClick={() => void treeRequest.refresh()}
               >
                 重新加载
               </button>
@@ -322,7 +424,11 @@ export default function AdminDocumentCenterPage() {
               <button
                 className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 disabled:opacity-40"
                 type="button"
-                disabled={!selectedNode}
+                disabled={
+                  deleting
+                  || !selectedNode
+                  || (selectedNode.nodeType === 'DOCUMENT' && selectedNode.publishState !== 'DRAFT')
+                }
                 onClick={handleDeleteNode}
               >
                 删除节点
@@ -373,30 +479,38 @@ export default function AdminDocumentCenterPage() {
             </div>
           </div>
         </div>
-        {loading ? (
+        {treeRequest.loading ? (
           <div className="text-sm text-gray-500">加载中...</div>
         ) : (
           <DocumentTreePanel
             nodes={typedTree?.nodes ?? []}
+            activeDocumentId={documentId}
             activeNodeId={selectedNode?.id}
             searchable
             showPublishState
+            onDeleteDraft={(node) => void handleDeleteDraft(node)}
             onMoveNode={(node, destination) => void handleTreeDrop(node, destination)}
-            onSelect={(node) => {
-              setSelectedNode(node);
-              setMoveTargetParentId(node.parentId);
-              if (node.nodeType === 'DOCUMENT') {
-                history.push(`/admin/document-center/${node.id}`);
-              }
-            }}
+            onSelect={(node) => void handleSelectNode(node)}
           />
         )}
       </aside>
-      <section className="flex-1 p-8">
-        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
-          请选择或新建一篇文档
-        </div>
+      <section className="min-w-0 flex-1">
+        {documentId && detailRequest.loading ? (
+          <div className="p-8 text-sm text-gray-500">加载中...</div>
+        ) : documentId && detailRequest.error ? (
+          <div className="m-8 rounded-xl border border-dashed border-red-200 bg-white p-10 text-center text-red-600">
+            <div className="font-medium">文档加载失败</div>
+            <div className="mt-2 text-sm">{getErrorMessage(detailRequest.error, '文档不存在或已被删除。')}</div>
+          </div>
+        ) : (
+          <DocumentEditorShell
+            document={document}
+            onDocumentChange={treeRequest.refresh}
+            onPendingChange={setHasPendingEditorWork}
+          />
+        )}
       </section>
+      {dialog}
     </main>
   );
 }

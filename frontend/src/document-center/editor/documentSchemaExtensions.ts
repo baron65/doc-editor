@@ -8,6 +8,9 @@ import { MermaidExtension } from '../mermaid/MermaidExtension';
 export function createDocumentSchemaExtensions() {
   return [
     StarterKit.configure({
+      heading: {
+        levels: [1, 2, 3, 4, 5],
+      },
       link: {
         autolink: true,
         openOnClick: false,

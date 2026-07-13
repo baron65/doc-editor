@@ -1,0 +1,819 @@
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import type { Editor } from '@tiptap/core';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { EditorContent } from '@tiptap/react';
+import {
+  getBlockHandlePresentation,
+  getBlockMenuSide,
+  getDocumentBlockTextRange,
+  resolveDocumentBlockTarget,
+  type DocumentBlockTarget,
+} from './blockContextModel';
+import {
+  BLOCK_SHORTCUTS,
+  formatBlockShortcut,
+  matchesBlockShortcut,
+  type BlockShortcutName,
+} from './blockShortcutModel';
+import type { CalloutKind } from '../callout/CalloutExtension';
+import { blockHighlightPluginKey } from './BlockHighlightExtension';
+import { SAFE_TEXT_COLORS, normalizeBlockIndent, type BlockTextAlign } from '../content/blockFormatting';
+
+interface BlockContextToolbarProps {
+  editor: Editor | null;
+  disabled?: boolean;
+  onSetLink: () => void;
+  onInsertCodeBlock: (position: number) => void;
+  onInsertImage: (position: number) => void;
+  onReplaceImage: (position: number) => void;
+  onEditImageAlt: (position: number) => void;
+  onEditImageCaption: (position: number) => void;
+  onInsertAttachment: (position: number) => void;
+  onInsertMermaid: (position: number) => void;
+}
+
+interface BlockTarget {
+  top: number;
+  pos: number;
+  end: number;
+  insertionPos: number;
+  selectionPos: number;
+  viewportTop: number;
+  type: string;
+  empty: boolean;
+  attrs: Record<string, unknown>;
+  node: ProseMirrorNode;
+  handleViewportLeft: number;
+}
+
+type MenuView = 'main' | 'alignment' | 'color';
+
+export function BlockContextToolbar({
+  editor,
+  disabled,
+  onSetLink,
+  onInsertCodeBlock,
+  onInsertImage,
+  onReplaceImage,
+  onEditImageAlt,
+  onEditImageCaption,
+  onInsertAttachment,
+  onInsertMermaid,
+}: BlockContextToolbarProps) {
+  const [target, setTarget] = useState<BlockTarget>();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuView, setMenuView] = useState<MenuView>('main');
+  const [selectionMenu, setSelectionMenu] = useState<{ top: number; left: number }>();
+  const closeMenuTimerRef = useRef<number>();
+  const isMac = isMacPlatform();
+
+  useEffect(() => {
+    if (!editor) {
+      return undefined;
+    }
+    const updateSelectionMenu = () => {
+      const { from, to, empty } = editor.state.selection;
+      if (empty || disabled) {
+        setSelectionMenu(undefined);
+        return;
+      }
+      const start = editor.view.coordsAtPos(from);
+      const end = editor.view.coordsAtPos(to);
+      setSelectionMenu({
+        top: Math.max(8, Math.min(start.top, end.top) - 46),
+        left: Math.max(8, Math.min(window.innerWidth - 250, (start.left + end.right) / 2 - 120)),
+      });
+    };
+    const hideSelectionMenu = () => setSelectionMenu(undefined);
+    editor.on('selectionUpdate', updateSelectionMenu);
+    editor.on('blur', hideSelectionMenu);
+    return () => {
+      editor.off('selectionUpdate', updateSelectionMenu);
+      editor.off('blur', hideSelectionMenu);
+    };
+  }, [disabled, editor]);
+
+  useEffect(() => () => {
+    if (closeMenuTimerRef.current) {
+      window.clearTimeout(closeMenuTimerRef.current);
+    }
+    if (editor && !editor.isDestroyed) {
+      editor.view.dispatch(editor.state.tr.setMeta(blockHighlightPluginKey, null));
+    }
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor) {
+      return undefined;
+    }
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (disabled || event.isComposing || !editor.view.hasFocus()) {
+        return;
+      }
+      const shortcut = (Object.keys(BLOCK_SHORTCUTS) as BlockShortcutName[]).find((name) => (
+        matchesBlockShortcut(event, BLOCK_SHORTCUTS[name], isMac)
+      ));
+      if (!shortcut) {
+        return;
+      }
+      const block = resolveDocumentBlockTarget(editor.state.doc, editor.state.selection.from);
+      if (!block || !runShortcutAction(shortcut, block, {
+        editor,
+        onSetLink,
+        onInsertCodeBlock,
+        onInsertImage,
+        onReplaceImage,
+        onEditImageAlt,
+        onEditImageCaption,
+        onInsertAttachment,
+        onInsertMermaid,
+      })) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const editorElement = editor.view.dom;
+    editorElement.addEventListener('keydown', handleShortcut, true);
+    return () => editorElement.removeEventListener('keydown', handleShortcut, true);
+  }, [
+    disabled,
+    editor,
+    isMac,
+    onEditImageAlt,
+    onEditImageCaption,
+    onInsertAttachment,
+    onInsertCodeBlock,
+    onInsertImage,
+    onInsertMermaid,
+    onReplaceImage,
+    onSetLink,
+  ]);
+
+  if (!editor) {
+    return null;
+  }
+
+  const clearTargetHighlight = () => {
+    editor.view.dispatch(editor.state.tr.setMeta(blockHighlightPluginKey, null));
+  };
+
+  const cancelScheduledClose = () => {
+    if (closeMenuTimerRef.current) {
+      window.clearTimeout(closeMenuTimerRef.current);
+      closeMenuTimerRef.current = undefined;
+    }
+  };
+
+  const scheduleMenuClose = () => {
+    cancelScheduledClose();
+    closeMenuTimerRef.current = window.setTimeout(() => {
+      clearTargetHighlight();
+      setMenuOpen(false);
+      closeMenuTimerRef.current = undefined;
+    }, 120);
+  };
+
+  const highlightTarget = () => {
+    if (!target) {
+      return;
+    }
+    editor.view.dispatch(editor.state.tr.setMeta(blockHighlightPluginKey, {
+      from: target.pos,
+      to: target.end,
+    }));
+  };
+
+  const focusTarget = () => {
+    const position = Math.min(target ? target.selectionPos : editor.state.selection.from, editor.state.doc.content.size);
+    return editor.chain().focus().setTextSelection(position);
+  };
+
+  const insertionPosition = () => {
+    if (!target) {
+      return editor.state.selection.from;
+    }
+    return target.insertionPos;
+  };
+
+  const insertAfterTarget = (content: Record<string, unknown>) => {
+    editor.chain().focus().insertContentAt(insertionPosition(), content).run();
+  };
+
+  const run = (action: () => void) => {
+    action();
+    cancelScheduledClose();
+    setMenuOpen(false);
+    clearTargetHighlight();
+  };
+
+  const openMenu = () => {
+    if (!target || disabled) {
+      return;
+    }
+    cancelScheduledClose();
+    highlightTarget();
+    if (!menuOpen) setMenuView('main');
+    setMenuOpen(true);
+  };
+
+  const handleMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (disabled) {
+      return;
+    }
+    if ((event.target as HTMLElement).closest('[data-block-handle="true"]')) {
+      cancelScheduledClose();
+      highlightTarget();
+      setMenuOpen(true);
+      return;
+    }
+    if (menuOpen) {
+      scheduleMenuClose();
+      return;
+    }
+    const position = editor.view.posAtCoords({
+      left: event.clientX,
+      top: event.clientY,
+    });
+    if (!position) {
+      // Keep the last block active while the pointer crosses the editor gutter toward the handle.
+      return;
+    }
+    const blockTarget = resolveDocumentBlockTarget(editor.state.doc, position.pos);
+    if (!blockTarget) {
+      return;
+    }
+    const block = editor.view.nodeDOM(blockTarget.pos);
+    if (!(block instanceof HTMLElement)) {
+      return;
+    }
+    const wrapperRect = event.currentTarget.getBoundingClientRect();
+    const blockRect = block.getBoundingClientRect();
+    const { node } = blockTarget;
+    const nextTarget = {
+      top: blockRect.top - wrapperRect.top + 2,
+      viewportTop: blockRect.top + 2,
+      pos: blockTarget.pos,
+      end: blockTarget.end,
+      insertionPos: blockTarget.insertionPos,
+      selectionPos: blockTarget.selectionPos,
+      type: blockTarget.presentationType,
+      empty: node.textContent.length === 0,
+      attrs: node.attrs,
+      node,
+      handleViewportLeft: wrapperRect.left + 8,
+    };
+    setTarget((current) => (
+      current?.pos === nextTarget.pos && current.top === nextTarget.top
+        ? current
+        : nextTarget
+    ));
+  };
+
+  const presentation = target
+    ? getBlockHandlePresentation(target.type, target.empty, target.attrs)
+    : undefined;
+  const menuOffsetTop = target
+    ? Math.max(16, Math.min(target.viewportTop, window.innerHeight - Math.min(640, window.innerHeight - 32) - 16))
+      - target.viewportTop
+    : 0;
+  const shortcutLabel = (name: BlockShortcutName) => formatBlockShortcut(BLOCK_SHORTCUTS[name], isMac);
+  const menuSide = target ? getBlockMenuSide(target.handleViewportLeft, window.innerWidth) : 'right';
+
+  const targetDocumentBlock = (): DocumentBlockTarget | undefined => target ? ({
+    pos: target.pos,
+    end: target.end,
+    insertionPos: target.insertionPos,
+    selectionPos: target.selectionPos,
+    presentationType: target.type,
+    node: target.node,
+  }) : undefined;
+
+  const setTargetAlignment = (textAlign: BlockTextAlign) => {
+    if (!target || !['paragraph', 'heading'].includes(target.type)) return;
+    run(() => focusTarget().updateAttributes(target.type, { textAlign }).run());
+  };
+
+  const changeTargetIndent = (delta: number) => {
+    if (!target) return;
+    if (['bulletList', 'orderedList'].includes(target.type)) {
+      run(() => delta > 0 ? focusTarget().sinkListItem('listItem').run() : focusTarget().liftListItem('listItem').run());
+      return;
+    }
+    if (!['paragraph', 'heading'].includes(target.type)) return;
+    const indent = normalizeBlockIndent(Number(target.attrs.indent ?? 0) + delta);
+    run(() => focusTarget().updateAttributes(target.type, { indent }).run());
+  };
+
+  const applyTargetColor = (color: string | null) => {
+    const range = getDocumentBlockTextRange(targetDocumentBlock());
+    if (!range || range.from === range.to) return;
+    run(() => {
+      const chain = editor.chain().focus().setTextSelection(range);
+      if (color) chain.setTextColor(color).run();
+      else chain.unsetTextColor().run();
+    });
+  };
+
+  const duplicateTargetNode = () => {
+    if (!target) return;
+    run(() => editor.chain().focus().insertContentAt(target.end, target.node.toJSON()).run());
+  };
+
+  const deleteTargetNode = () => {
+    if (!target) return;
+    run(() => editor.chain().focus().deleteRange({ from: target.pos, to: target.end }).run());
+  };
+
+  return (
+    <div
+      className="relative"
+      data-block-context-editor="true"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => {
+        if (!menuOpen) {
+          setTarget(undefined);
+        }
+      }}
+    >
+      <EditorContent editor={editor} />
+      {target && presentation ? (
+        <div
+          data-block-handle="true"
+          className="absolute left-2 z-30"
+          style={{ top: target.top }}
+          onPointerEnter={() => {
+            cancelScheduledClose();
+            highlightTarget();
+            openMenu();
+          }}
+          onMouseLeave={scheduleMenuClose}
+        >
+          <button
+            aria-label={presentation.label}
+            className="flex h-8 min-w-8 items-center justify-center rounded-md border border-gray-200 bg-white px-1.5 text-xs font-medium text-gray-500 shadow-sm hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+            type="button"
+            onClick={openMenu}
+            onPointerEnter={() => {
+              cancelScheduledClose();
+              highlightTarget();
+              openMenu();
+            }}
+          >
+            {presentation.icon}
+          </button>
+          {menuOpen ? (
+            <div
+              className={`absolute ${menuSide === 'left' ? 'right-9' : 'left-9'} w-60 max-h-[min(40rem,calc(100vh-2rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl`}
+              style={{ top: menuOffsetTop }}
+              role="menu"
+              aria-label="块工具箱"
+            >
+              {menuView !== 'main' ? (
+                <button className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-gray-600 hover:bg-gray-50" type="button" onClick={() => setMenuView('main')}>
+                  <span aria-hidden="true">←</span>{menuView === 'alignment' ? '缩进和对齐' : '文字颜色'}
+                </button>
+              ) : null}
+              {menuView === 'alignment' ? (
+                <MenuGroup label="对齐方式">
+                  {(['left', 'center', 'right', 'justify'] as BlockTextAlign[]).map((align) => (
+                    <MenuButton key={align} icon={<BlockToolIcon type={`align-${align}`} />} label={alignmentLabel(align)} shortcut={shortcutLabel(alignmentShortcutName(align))} onRun={() => setTargetAlignment(align)} />
+                  ))}
+                  <MenuButton icon={<BlockToolIcon type="indent-decrease" />} label="减少缩进" shortcut={shortcutLabel('indentDecrease')} onRun={() => changeTargetIndent(-1)} />
+                  <MenuButton icon={<BlockToolIcon type="indent-increase" />} label="增加缩进" shortcut={shortcutLabel('indentIncrease')} onRun={() => changeTargetIndent(1)} />
+                </MenuGroup>
+              ) : null}
+              {menuView === 'color' ? (
+                <MenuGroup label="安全色板">
+                  {SAFE_TEXT_COLORS.map((color) => (
+                    <MenuButton key={color.value ?? 'default'} icon={<ColorSwatch color={color.value} />} label={color.label} shortcut={shortcutLabel(colorShortcutName(color.value))} onRun={() => applyTargetColor(color.value)} />
+                  ))}
+                </MenuGroup>
+              ) : null}
+              {menuView === 'main' ? <>
+              <MenuGroup compact label="转换为">
+                <MenuButton
+                  compact
+                  active={target.type === 'paragraph'}
+                  icon="T"
+                  label="正文"
+                  shortcut={shortcutLabel('paragraph')}
+                  onRun={() => run(() => focusTarget().setParagraph().run())}
+                />
+                {([1, 2, 3, 4, 5] as const).map((level) => (
+                  <MenuButton
+                    key={level}
+                    compact
+                    active={target.type === 'heading' && Number(target.attrs.level) === level}
+                    icon={`H${level}`}
+                    label={`H${level}`}
+                    shortcut={shortcutLabel(`heading${level}` as BlockShortcutName)}
+                    onRun={() => run(() => focusTarget().toggleHeading({ level }).run())}
+                  />
+                ))}
+                <MenuButton compact active={target.type === 'bulletList'} icon={<BlockToolIcon type="bullet-list" />} label="列表" shortcut={shortcutLabel('bulletList')} onRun={() => run(() => focusTarget().toggleBulletList().run())} />
+                <MenuButton compact active={target.type === 'orderedList'} icon={<BlockToolIcon type="ordered-list" />} label="编号" shortcut={shortcutLabel('orderedList')} onRun={() => run(() => focusTarget().toggleOrderedList().run())} />
+                <MenuButton compact active={target.type === 'blockquote'} icon={<BlockToolIcon type="quote" />} label="引用" shortcut={shortcutLabel('blockquote')} onRun={() => run(() => focusTarget().toggleBlockquote().run())} />
+                <MenuButton compact active={target.type === 'codeBlock'} icon={<BlockToolIcon type="code" />} label="代码块" shortcut={shortcutLabel('codeBlock')} onRun={() => run(() => onInsertCodeBlock(target.selectionPos))} />
+              </MenuGroup>
+              <MenuGroup label="格式">
+                <MenuButton icon={<BlockToolIcon type="align-left" />} label="缩进和对齐" shortcut={shortcutLabel('alignLeft')} onRun={() => setMenuView('alignment')} />
+                <MenuButton icon={<BlockToolIcon type="color" />} label="文字颜色" shortcut={shortcutLabel('colorDefault')} onRun={() => setMenuView('color')} />
+              </MenuGroup>
+              <MenuGroup label="插入">
+                <MenuButton label="分割线" shortcut={shortcutLabel('horizontalRule')} onRun={() => run(() => insertAfterTarget({ type: 'horizontalRule' }))} />
+                <MenuButton
+                  label="表格"
+                  shortcut={shortcutLabel('table')}
+                  onRun={() => run(() => insertAfterTarget(createTableContent()))}
+                />
+                <MenuButton label="图片" shortcut={shortcutLabel('image')} onRun={() => run(() => onInsertImage(insertionPosition()))} />
+                <MenuButton label="附件" shortcut={shortcutLabel('attachment')} onRun={() => run(() => onInsertAttachment(insertionPosition()))} />
+                <MenuButton label="Mermaid" shortcut={shortcutLabel('mermaid')} onRun={() => run(() => onInsertMermaid(insertionPosition()))} />
+              </MenuGroup>
+              <MenuGroup label="提示块">
+                {(['info', 'warning', 'success', 'danger'] as CalloutKind[]).map((kind) => (
+                  <MenuButton
+                    key={kind}
+                    active={target.type === 'callout' && target.attrs.kind === kind}
+                    label={calloutLabel(kind)}
+                    shortcut={shortcutLabel(calloutShortcutName(kind))}
+                    onRun={() => run(() => {
+                      if (target.type === 'callout') {
+                        focusTarget().updateAttributes('callout', { kind }).run();
+                      } else {
+                        insertAfterTarget({
+                          type: 'callout',
+                          attrs: { kind },
+                          content: [{ type: 'paragraph' }],
+                        });
+                      }
+                    })}
+                  />
+                ))}
+              </MenuGroup>
+              {target.type === 'table' ? (
+                <MenuGroup label="表格操作">
+                  <MenuButton label="插入列" shortcut={shortcutLabel('addColumn')} onRun={() => run(() => focusTarget().addColumnAfter().run())} />
+                  <MenuButton label="删除列" shortcut={shortcutLabel('deleteColumn')} onRun={() => run(() => focusTarget().deleteColumn().run())} />
+                  <MenuButton label="插入行" shortcut={shortcutLabel('addRow')} onRun={() => run(() => focusTarget().addRowAfter().run())} />
+                  <MenuButton label="删除行" shortcut={shortcutLabel('deleteRow')} onRun={() => run(() => focusTarget().deleteRow().run())} />
+                  <MenuButton label="删除表格" shortcut={shortcutLabel('deleteTable')} danger onRun={() => run(() => focusTarget().deleteTable().run())} />
+                </MenuGroup>
+              ) : null}
+              {target.type === 'image' ? (
+                <MenuGroup label="图片操作">
+                  <MenuButton label="替换" shortcut={shortcutLabel('replaceImage')} onRun={() => run(() => onReplaceImage(target.pos))} />
+                  <MenuButton label="替代文本" shortcut={shortcutLabel('imageAlt')} onRun={() => run(() => onEditImageAlt(target.pos))} />
+                  <MenuButton label="图片说明" shortcut={shortcutLabel('imageCaption')} onRun={() => run(() => onEditImageCaption(target.pos))} />
+                </MenuGroup>
+              ) : null}
+              <MenuGroup label="节点操作">
+                <MenuButton icon={<BlockToolIcon type="copy" />} label="复制节点" shortcut={shortcutLabel('duplicateNode')} onRun={duplicateTargetNode} />
+                <MenuButton icon={<BlockToolIcon type="delete" />} label="删除节点" shortcut={shortcutLabel('deleteNode')} danger onRun={deleteTargetNode} />
+              </MenuGroup>
+              </> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {selectionMenu ? (
+        <div
+          className="fixed z-40 flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-xl"
+          style={selectionMenu}
+          aria-label="文字格式工具栏"
+        >
+          <InlineButton active={editor.isActive('bold')} label="加粗" shortcut={shortcutLabel('bold')} onRun={() => editor.chain().focus().toggleBold().run()} />
+          <InlineButton active={editor.isActive('italic')} label="斜体" shortcut={shortcutLabel('italic')} onRun={() => editor.chain().focus().toggleItalic().run()} />
+          <InlineButton active={editor.isActive('underline')} label="下划线" shortcut={shortcutLabel('underline')} onRun={() => editor.chain().focus().toggleUnderline().run()} />
+          <InlineButton active={editor.isActive('link')} label="链接" shortcut={shortcutLabel('link')} onRun={onSetLink} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MenuGroup({
+  label,
+  compact,
+  children,
+}: {
+  label: string;
+  compact?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="border-b border-gray-100 py-2 first:pt-0 last:border-b-0 last:pb-0">
+      <div className={compact ? 'sr-only' : 'mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-gray-400'}>{label}</div>
+      <div className={compact ? 'grid grid-cols-5 gap-1' : 'flex flex-col gap-0.5'}>{children}</div>
+    </div>
+  );
+}
+
+function MenuButton({
+  label,
+  icon,
+  shortcut,
+  compact,
+  active,
+  danger,
+  onRun,
+}: {
+  label: string;
+  icon?: ReactNode;
+  shortcut: string;
+  compact?: boolean;
+  active?: boolean;
+  danger?: boolean;
+  onRun: () => void;
+}) {
+  return (
+    <button
+      aria-label={`${label}，快捷键 ${shortcut}`}
+      title={`${label} · ${shortcut}`}
+      className={`${compact ? 'flex h-11 items-center justify-center rounded-lg px-1 text-base' : 'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm'} ${
+        danger
+          ? 'text-red-700 hover:bg-red-50'
+          : active
+            ? 'bg-brand-50 font-medium text-brand-700'
+            : 'text-gray-700 hover:bg-gray-50'
+      }`}
+      type="button"
+      role="menuitem"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onRun}
+    >
+      {compact ? (
+        <>
+          <span aria-hidden="true">{icon ?? label}</span>
+          <span className="sr-only">{label}，{shortcut}</span>
+        </>
+      ) : (
+        <>
+          <span className="flex min-w-0 items-center gap-2">{icon ? <span className="shrink-0 text-gray-500">{icon}</span> : null}<span>{label}</span></span>
+          <kbd className="shrink-0 font-sans text-[11px] font-normal text-gray-400">{shortcut}</kbd>
+        </>
+      )}
+    </button>
+  );
+}
+
+function BlockToolIcon({ type }: { type: string }) {
+  const common = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  const lines = <><path d="M9 6h11M9 12h11M9 18h11" /></>;
+  return (
+    <svg {...common} aria-hidden="true">
+      {type === 'bullet-list' ? <><circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />{lines}</> : null}
+      {type === 'ordered-list' ? <><path d="M3 5h2v3M3 11h2l-2 3h2M3 17h2l-2 2h2" />{lines}</> : null}
+      {type === 'quote' ? <path d="M5 7h5v5H6c0 3-1 4-3 5M14 7h5v5h-4c0 3-1 4-3 5" /> : null}
+      {type === 'code' ? <path d="m8 5-4 7 4 7M16 5l4 7-4 7M14 3l-4 18" /> : null}
+      {type.startsWith('align-') ? alignmentIcon(type.slice(6)) : null}
+      {type === 'indent-increase' ? <>{lines}<path d="m3 9 3 3-3 3" /></> : null}
+      {type === 'indent-decrease' ? <>{lines}<path d="m6 9-3 3 3 3" /></> : null}
+      {type === 'color' ? <><path d="m5 19 7-14 7 14M8 14h8" /><path d="M4 22h16" stroke="#2563eb" strokeWidth="3" /></> : null}
+      {type === 'copy' ? <><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></> : null}
+      {type === 'delete' ? <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></> : null}
+    </svg>
+  );
+}
+
+function alignmentIcon(align: string) {
+  if (align === 'center') return <path d="M5 6h14M8 10h8M5 14h14M8 18h8" />;
+  if (align === 'right') return <path d="M5 6h14M9 10h10M5 14h14M9 18h10" />;
+  if (align === 'justify') return <path d="M5 6h14M5 10h14M5 14h14M5 18h14" />;
+  return <path d="M5 6h14M5 10h10M5 14h14M5 18h10" />;
+}
+
+function ColorSwatch({ color }: { color: string | null }) {
+  return <span className="block h-4 w-4 rounded-full border border-gray-300" style={{ backgroundColor: color ?? '#ffffff' }} />;
+}
+
+function alignmentLabel(align: BlockTextAlign) {
+  return { left: '左对齐', center: '居中对齐', right: '右对齐', justify: '两端对齐' }[align];
+}
+
+function alignmentShortcutName(align: BlockTextAlign): BlockShortcutName {
+  return { left: 'alignLeft', center: 'alignCenter', right: 'alignRight', justify: 'alignJustify' }[align] as BlockShortcutName;
+}
+
+function colorShortcutName(color: string | null): BlockShortcutName {
+  return ({
+    default: 'colorDefault',
+    '#4b5563': 'colorGray', '#dc2626': 'colorRed', '#ea580c': 'colorOrange',
+    '#16a34a': 'colorGreen', '#2563eb': 'colorBlue', '#9333ea': 'colorPurple',
+  }[color ?? 'default'] ?? 'colorDefault') as BlockShortcutName;
+}
+
+function InlineButton({
+  label,
+  shortcut,
+  active,
+  onRun,
+}: {
+  label: string;
+  shortcut: string;
+  active?: boolean;
+  onRun: () => void;
+}) {
+  return (
+    <button
+      aria-label={`${label}，快捷键 ${shortcut}`}
+      title={`${label} · ${shortcut}`}
+      className={`rounded px-2 py-1.5 text-xs ${active ? 'bg-brand-50 text-brand-700' : 'text-gray-700 hover:bg-gray-50'}`}
+      type="button"
+      onMouseDown={(event) => {
+        event.preventDefault();
+        onRun();
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function calloutLabel(kind: CalloutKind) {
+  return { info: '信息', warning: '注意', success: '成功', danger: '危险' }[kind];
+}
+
+function calloutShortcutName(kind: CalloutKind): BlockShortcutName {
+  return {
+    info: 'calloutInfo',
+    warning: 'calloutWarning',
+    success: 'calloutSuccess',
+    danger: 'calloutDanger',
+  }[kind] as BlockShortcutName;
+}
+
+interface ShortcutActions {
+  editor: Editor;
+  onSetLink: () => void;
+  onInsertCodeBlock: (position: number) => void;
+  onInsertImage: (position: number) => void;
+  onReplaceImage: (position: number) => void;
+  onEditImageAlt: (position: number) => void;
+  onEditImageCaption: (position: number) => void;
+  onInsertAttachment: (position: number) => void;
+  onInsertMermaid: (position: number) => void;
+}
+
+function runShortcutAction(
+  name: BlockShortcutName,
+  block: DocumentBlockTarget,
+  actions: ShortcutActions,
+) {
+  const {
+    editor,
+    onSetLink,
+    onInsertCodeBlock,
+    onInsertImage,
+    onReplaceImage,
+    onEditImageAlt,
+    onEditImageCaption,
+    onInsertAttachment,
+    onInsertMermaid,
+  } = actions;
+  const focusBlock = () => editor.chain().focus().setTextSelection(block.selectionPos);
+  const insert = (content: Record<string, unknown>) => (
+    editor.chain().focus().insertContentAt(block.insertionPos, content).run()
+  );
+  const setCallout = (kind: CalloutKind) => {
+    if (block.presentationType === 'callout') {
+      return focusBlock().updateAttributes('callout', { kind }).run();
+    }
+    return insert({
+      type: 'callout',
+      attrs: { kind },
+      content: [{ type: 'paragraph' }],
+    });
+  };
+
+  switch (name) {
+    case 'bold':
+      return editor.chain().focus().toggleBold().run();
+    case 'italic':
+      return editor.chain().focus().toggleItalic().run();
+    case 'underline':
+      return editor.chain().focus().toggleUnderline().run();
+    case 'link':
+      onSetLink();
+      return true;
+    case 'paragraph':
+      return focusBlock().setParagraph().run();
+    case 'heading1':
+    case 'heading2':
+    case 'heading3':
+    case 'heading4':
+    case 'heading5':
+      return focusBlock().toggleHeading({ level: Number(name.slice(-1)) as 1 | 2 | 3 | 4 | 5 }).run();
+    case 'bulletList':
+      return focusBlock().toggleBulletList().run();
+    case 'orderedList':
+      return focusBlock().toggleOrderedList().run();
+    case 'blockquote':
+      return focusBlock().toggleBlockquote().run();
+    case 'codeBlock':
+      onInsertCodeBlock(block.selectionPos);
+      return true;
+    case 'horizontalRule':
+      return insert({ type: 'horizontalRule' });
+    case 'table':
+      return insert(createTableContent());
+    case 'image':
+      onInsertImage(block.insertionPos);
+      return true;
+    case 'attachment':
+      onInsertAttachment(block.insertionPos);
+      return true;
+    case 'mermaid':
+      onInsertMermaid(block.insertionPos);
+      return true;
+    case 'calloutInfo':
+      return setCallout('info');
+    case 'calloutWarning':
+      return setCallout('warning');
+    case 'calloutSuccess':
+      return setCallout('success');
+    case 'calloutDanger':
+      return setCallout('danger');
+    case 'addColumn':
+      return block.presentationType === 'table' && focusBlock().addColumnAfter().run();
+    case 'deleteColumn':
+      return block.presentationType === 'table' && focusBlock().deleteColumn().run();
+    case 'addRow':
+      return block.presentationType === 'table' && focusBlock().addRowAfter().run();
+    case 'deleteRow':
+      return block.presentationType === 'table' && focusBlock().deleteRow().run();
+    case 'deleteTable':
+      return block.presentationType === 'table' && focusBlock().deleteTable().run();
+    case 'replaceImage':
+      if (block.presentationType !== 'image') return false;
+      onReplaceImage(block.pos);
+      return true;
+    case 'imageAlt':
+      if (block.presentationType !== 'image') return false;
+      onEditImageAlt(block.pos);
+      return true;
+    case 'imageCaption':
+      if (block.presentationType !== 'image') return false;
+      onEditImageCaption(block.pos);
+      return true;
+    case 'alignLeft':
+    case 'alignCenter':
+    case 'alignRight':
+    case 'alignJustify': {
+      if (!['paragraph', 'heading'].includes(block.presentationType)) return false;
+      const textAlign = { alignLeft: 'left', alignCenter: 'center', alignRight: 'right', alignJustify: 'justify' }[name];
+      return focusBlock().updateAttributes(block.presentationType, { textAlign }).run();
+    }
+    case 'indentIncrease':
+    case 'indentDecrease': {
+      const delta = name === 'indentIncrease' ? 1 : -1;
+      if (['bulletList', 'orderedList'].includes(block.presentationType)) {
+        return delta > 0 ? focusBlock().sinkListItem('listItem').run() : focusBlock().liftListItem('listItem').run();
+      }
+      if (!['paragraph', 'heading'].includes(block.presentationType)) return false;
+      return focusBlock().updateAttributes(block.presentationType, {
+        indent: normalizeBlockIndent(Number(block.node.attrs.indent ?? 0) + delta),
+      }).run();
+    }
+    case 'colorDefault':
+    case 'colorGray':
+    case 'colorRed':
+    case 'colorOrange':
+    case 'colorGreen':
+    case 'colorBlue':
+    case 'colorPurple': {
+      const range = getDocumentBlockTextRange(block);
+      if (!range || range.from === range.to) return false;
+      const color = {
+        colorDefault: null, colorGray: '#4b5563', colorRed: '#dc2626', colorOrange: '#ea580c',
+        colorGreen: '#16a34a', colorBlue: '#2563eb', colorPurple: '#9333ea',
+      }[name];
+      const chain = editor.chain().focus().setTextSelection(range);
+      return color ? chain.setTextColor(color).run() : chain.unsetTextColor().run();
+    }
+    case 'duplicateNode':
+      return editor.chain().focus().insertContentAt(block.end, block.node.toJSON()).run();
+    case 'deleteNode':
+      return editor.chain().focus().deleteRange({ from: block.pos, to: block.end }).run();
+    default:
+      return false;
+  }
+}
+
+function isMacPlatform() {
+  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+}
+
+function createTableContent() {
+  const cell = () => ({ type: 'tableCell', content: [{ type: 'paragraph' }] });
+  const headerCell = () => ({ type: 'tableHeader', content: [{ type: 'paragraph' }] });
+  return {
+    type: 'table',
+    content: [
+      { type: 'tableRow', content: [headerCell(), headerCell(), headerCell()] },
+      { type: 'tableRow', content: [cell(), cell(), cell()] },
+      { type: 'tableRow', content: [cell(), cell(), cell()] },
+    ],
+  };
+}

@@ -15,6 +15,7 @@ interface DocumentTreePanelProps {
     node: DocumentTreeNode,
     destination: { targetParentId: string; targetIndex: number },
   ) => void;
+  onDeleteDraft?: (node: DocumentTreeNode) => void;
 }
 
 export function DocumentTreePanel({
@@ -25,6 +26,7 @@ export function DocumentTreePanel({
   showPublishState = false,
   onSelect,
   onMoveNode,
+  onDeleteDraft,
 }: DocumentTreePanelProps) {
   const [keyword, setKeyword] = useState('');
   const [collapsedDirectoryIds, setCollapsedDirectoryIds] = useState<Set<string>>(new Set());
@@ -127,6 +129,7 @@ export function DocumentTreePanel({
             setDropTargetNodeId(undefined);
           }}
           onDrop={handleDrop}
+          onDeleteDraft={onDeleteDraft}
         />
       ))}
       </div>
@@ -150,6 +153,7 @@ interface TreeNodeItemProps {
   onDragOver: (event: DragEvent, node: DocumentTreeNode) => void;
   onDragEnd: () => void;
   onDrop: (event: DragEvent, node: DocumentTreeNode) => void;
+  onDeleteDraft?: (node: DocumentTreeNode) => void;
 }
 
 function TreeNodeItem({
@@ -168,6 +172,7 @@ function TreeNodeItem({
   onDragOver,
   onDragEnd,
   onDrop,
+  onDeleteDraft,
 }: TreeNodeItemProps) {
   const active = node.id === activeDocumentId || node.id === activeNodeId;
   const isDirectory = node.nodeType === 'DIRECTORY';
@@ -217,6 +222,22 @@ function TreeNodeItem({
             ) : null}
           </span>
         </button>
+        {!isDirectory && node.publishState === 'DRAFT' && onDeleteDraft ? (
+          <button
+            aria-label={`删除草稿 ${node.draftTitle ?? node.title}`}
+            className="mr-1 shrink-0 rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+            title="删除草稿"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteDraft(node);
+            }}
+          >
+            <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" />
+            </svg>
+          </button>
+        ) : null}
       </div>
       {!!node.children?.length && !collapsed && (
         <div className="ml-2 border-l border-gray-100 pl-2">
@@ -238,6 +259,7 @@ function TreeNodeItem({
               onDragOver={onDragOver}
               onDragEnd={onDragEnd}
               onDrop={onDrop}
+              onDeleteDraft={onDeleteDraft}
             />
           ))}
         </div>

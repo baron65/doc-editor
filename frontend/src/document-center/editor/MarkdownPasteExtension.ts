@@ -1,8 +1,9 @@
-import { Extension, type JSONContent } from '@tiptap/core';
+import { Extension } from '@tiptap/core';
 import { MarkdownManager } from '@tiptap/markdown';
 import { Plugin } from '@tiptap/pm/state';
 import type { DocumentContent } from '../../types/documentCenter';
 import { createDocumentSchemaExtensions } from './documentSchemaExtensions';
+import { normalizeMermaidCodeBlocks } from '../content/mermaidContent';
 
 const FENCED_BLOCK = /^```[^\n]*\n[\s\S]+?\n```/m;
 const NESTED_LIST = /^(?:\s*[-*+] |\s*\d+\. ).+\n\s{2,}(?:[-*+] |\d+\. )/m;
@@ -23,33 +24,12 @@ export function isStrongMarkdown(text: string) {
 
 export function parseMarkdownToDocument(markdown: string): DocumentContent {
   markdownManager ??= new MarkdownManager({ extensions: createDocumentSchemaExtensions() });
-  return transformMermaidCodeBlocks(markdownManager.parse(markdown));
-}
-
-function transformMermaidCodeBlocks(node: JSONContent): DocumentContent {
-  if (node.type === 'codeBlock' && node.attrs?.language?.toLocaleLowerCase() === 'mermaid') {
-    return {
-      type: 'mermaid',
-      attrs: {
-        source: collectText(node),
-      },
-    };
-  }
-  return {
-    ...node,
-    content: node.content?.map(transformMermaidCodeBlocks),
-  } as DocumentContent;
-}
-
-function collectText(node: JSONContent): string {
-  if (node.text) {
-    return node.text;
-  }
-  return (node.content ?? []).map(collectText).join('');
+  return normalizeMermaidCodeBlocks(markdownManager.parse(markdown) as DocumentContent);
 }
 
 export const MarkdownPasteExtension = Extension.create({
   name: 'documentMarkdownPaste',
+  priority: 1000,
 
   addProseMirrorPlugins() {
     const editor = this.editor;
@@ -58,7 +38,7 @@ export const MarkdownPasteExtension = Extension.create({
         props: {
           handlePaste: (_view, event) => {
             const clipboard = event.clipboardData;
-            if (!clipboard || clipboard.getData('text/html').trim()) {
+            if (!clipboard) {
               return false;
             }
             const text = clipboard.getData('text/plain');

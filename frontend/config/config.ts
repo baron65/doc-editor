@@ -13,9 +13,9 @@ export default defineConfig({
   routes: [
     { path: '/', redirect: '/document-center' },
     { path: '/document-center', component: './document-center/index' },
-    { path: '/document-center/:documentId', component: './document-center/detail' },
+    { path: '/document-center/:documentId', component: './document-center/index' },
     { path: '/admin/document-center', component: './admin/document-center/index' },
-    { path: '/admin/document-center/:documentId', component: './admin/document-center/detail' },
+    { path: '/admin/document-center/:documentId', component: './admin/document-center/index' },
   ],
   request: {},
   fastRefresh: true,

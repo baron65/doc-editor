@@ -34,6 +34,33 @@ class DocumentContentAbilityTest {
     }
 
     @Test
+    void acceptsSafeAlignmentIndentAndTextColor() {
+        DocumentContentAbility ability = new DocumentContentAbility();
+        String content = "{\"type\":\"doc\",\"content\":[{"
+                + "\"type\":\"paragraph\",\"attrs\":{\"textAlign\":\"center\",\"indent\":2},"
+                + "\"content\":[{\"type\":\"text\",\"text\":\"蓝色文字\","
+                + "\"marks\":[{\"type\":\"textStyle\",\"attrs\":{\"color\":\"#2563eb\"}}]}]}]}";
+
+        assertThat(ability.validateDraftContent(1, content).isValid()).isTrue();
+    }
+
+    @Test
+    void rejectsUnsafeAlignmentIndentAndTextColor() {
+        DocumentContentAbility ability = new DocumentContentAbility();
+        String unsafeAlignment = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\","
+                + "\"attrs\":{\"textAlign\":\"expression(alert(1))\"}}]}";
+        String unsafeIndent = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\","
+                + "\"attrs\":{\"indent\":99}}]}";
+        String unsafeColor = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\","
+                + "\"content\":[{\"type\":\"text\",\"text\":\"危险\",\"marks\":[{"
+                + "\"type\":\"textStyle\",\"attrs\":{\"color\":\"url(javascript:alert(1))\"}}]}]}]}";
+
+        assertThat(ability.validateDraftContent(1, unsafeAlignment).isValid()).isFalse();
+        assertThat(ability.validateDraftContent(1, unsafeIndent).isValid()).isFalse();
+        assertThat(ability.validateDraftContent(1, unsafeColor).isValid()).isFalse();
+    }
+
+    @Test
     void reportsUtf8ContentSizeViolationsSeparatelyFromSchemaErrors() {
         DocumentContentAbility ability = new DocumentContentAbility();
         String oversized = "{\"type\":\"doc\",\"content\":[{\"type\":\"text\",\"text\":\""

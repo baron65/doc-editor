@@ -1,0 +1,84 @@
+import { Extension, Mark, mergeAttributes } from '@tiptap/core';
+import {
+  buildBlockTextStyle,
+  normalizeBlockIndent,
+  normalizeBlockTextAlign,
+  normalizeTextColor,
+} from '../content/blockFormatting';
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    blockFormatting: {
+      setTextColor: (color: string) => ReturnType;
+      unsetTextColor: () => ReturnType;
+    };
+  }
+}
+
+const TextColorMark = Mark.create({
+  name: 'textStyle',
+  priority: 101,
+
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: (element) => normalizeTextColor(element.getAttribute('data-text-color') ?? element.style.color),
+        renderHTML: ({ color }) => {
+          const safeColor = normalizeTextColor(color);
+          return safeColor ? { 'data-text-color': safeColor, style: `color: ${safeColor}` } : {};
+        },
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-text-color]' }, { style: 'color' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes), 0];
+  },
+
+  addCommands() {
+    return {
+      setTextColor: (color) => ({ commands }) => {
+        const safeColor = normalizeTextColor(color);
+        return Boolean(safeColor) && commands.setMark(this.name, { color: safeColor });
+      },
+      unsetTextColor: () => ({ commands }) => commands.unsetMark(this.name),
+    };
+  },
+});
+
+export const BlockFormattingExtension = Extension.create({
+  name: 'blockFormatting',
+
+  addGlobalAttributes() {
+    return [{
+      types: ['paragraph', 'heading'],
+      attributes: {
+        textAlign: {
+          default: 'left',
+          parseHTML: (element) => normalizeBlockTextAlign(element.getAttribute('data-text-align') ?? element.style.textAlign),
+          renderHTML: (attrs) => {
+            const textAlign = normalizeBlockTextAlign(attrs.textAlign);
+            return { 'data-text-align': textAlign, style: buildBlockTextStyle({ textAlign }).textAlign };
+          },
+        },
+        indent: {
+          default: 0,
+          parseHTML: (element) => normalizeBlockIndent(element.getAttribute('data-indent')),
+          renderHTML: (attrs) => {
+            const indent = normalizeBlockIndent(attrs.indent);
+            return { 'data-indent': String(indent), style: `margin-left: ${indent * 24}px` };
+          },
+        },
+      },
+    }];
+  },
+
+  addExtensions() {
+    return [TextColorMark];
+  },
+});

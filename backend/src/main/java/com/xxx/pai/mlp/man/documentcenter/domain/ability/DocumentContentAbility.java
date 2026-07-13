@@ -26,7 +26,10 @@ public class DocumentContentAbility {
             "blockquote", "codeBlock", "horizontalRule", "hardBreak", "image", "attachment",
             "table", "tableRow", "tableHeader", "tableCell", "callout", "mermaid");
     private static final Set<String> ALLOWED_MARK_TYPES = Set.of(
-            "bold", "italic", "underline", "strike", "code", "link");
+            "bold", "italic", "underline", "strike", "code", "link", "textStyle");
+    private static final Set<String> ALLOWED_TEXT_ALIGNMENTS = Set.of("left", "center", "right", "justify");
+    private static final Set<String> ALLOWED_TEXT_COLORS = Set.of(
+            "#4b5563", "#dc2626", "#ea580c", "#16a34a", "#2563eb", "#9333ea");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -79,6 +82,7 @@ public class DocumentContentAbility {
         if (depth == 0 && !"doc".equals(type)) {
             throw new ValidationFailure("root node type must be doc");
         }
+        validateFormattingAttributes(type, node.get("attrs"));
         if (NODE_TYPE_MERMAID.equals(type)) {
             stats.count++;
             String source = resolveMermaidSource(node);
@@ -125,6 +129,38 @@ public class DocumentContentAbility {
             Object href = attrs instanceof Map ? ((Map<String, Object>) attrs).get("href") : null;
             if (!(href instanceof String) || !isSafeHref((String) href)) {
                 throw new ValidationFailure("unsafe link protocol");
+            }
+        }
+        if ("textStyle".equals(rawType)) {
+            Object attrs = mark.get("attrs");
+            Object color = attrs instanceof Map ? ((Map<String, Object>) attrs).get("color") : null;
+            if (!(color instanceof String) || !ALLOWED_TEXT_COLORS.contains(color)) {
+                throw new ValidationFailure("unsupported text color");
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateFormattingAttributes(String type, Object value) {
+        if (!(value instanceof Map)) {
+            return;
+        }
+        Map<String, Object> attrs = (Map<String, Object>) value;
+        boolean formattedBlock = "paragraph".equals(type) || "heading".equals(type);
+        if (attrs.containsKey("textAlign")) {
+            Object textAlign = attrs.get("textAlign");
+            if (!formattedBlock || !(textAlign instanceof String)
+                    || !ALLOWED_TEXT_ALIGNMENTS.contains(textAlign)) {
+                throw new ValidationFailure("unsupported text alignment");
+            }
+        }
+        if (attrs.containsKey("indent")) {
+            Object indent = attrs.get("indent");
+            if (!formattedBlock || !(indent instanceof Number)
+                    || ((Number) indent).doubleValue() % 1 != 0
+                    || ((Number) indent).intValue() < 0
+                    || ((Number) indent).intValue() > 6) {
+                throw new ValidationFailure("unsupported block indent");
             }
         }
     }

@@ -35,17 +35,41 @@ body {
 .document-editor h1,
 .document-editor h2,
 .document-editor h3,
+.document-editor h4,
+.document-editor h5,
 .document-content h1,
 .document-content h2,
-.document-content h3 {
+.document-content h3,
+.document-content h4,
+.document-content h5 {
   margin: 1.25rem 0 0.75rem;
   font-weight: 700;
   line-height: 1.35;
 }
 
+.document-editor h1,
+.document-content-body h1 {
+  font-size: 1.5rem;
+}
+
 .document-editor h2,
-.document-content h2 {
+.document-content-body h2 {
   font-size: 1.25rem;
+}
+
+.document-editor h3,
+.document-content-body h3 {
+  font-size: 1.125rem;
+}
+
+.document-editor h4,
+.document-content-body h4 {
+  font-size: 1rem;
+}
+
+.document-editor h5,
+.document-content-body h5 {
+  font-size: 0.875rem;
 }
 
 .document-editor ul,
@@ -151,6 +175,13 @@ body {
   background: rgb(219 234 254 / 45%);
   content: '';
   pointer-events: none;
+}
+
+.document-editor .block-handle-highlighted {
+  border-radius: 0.375rem;
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 #3b82f6;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
 .document-editor td,

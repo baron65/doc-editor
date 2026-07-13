@@ -86,6 +86,48 @@ test('Reader 展示发布时间、页内目录和前后篇导航', () => {
   assert.match(html, /href="\/document-center\/13"/);
 });
 
+test('Reader 在弹框容器内约束正文和目录滚动高度', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      containedScroll
+      document={{
+        documentId: '12',
+        title: '弹框预览',
+        content: {
+          type: 'doc',
+          content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '长目录' }] }],
+        },
+      }}
+    />,
+  );
+  assert.match(html, /h-full overflow-hidden/);
+  assert.match(html, /h-full overflow-y-auto overscroll-contain/);
+  assert.match(html, /max-h-full/);
+});
+
+test('Reader 按语义渲染 H1 到 H5 标题', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: '15',
+        title: '多级标题',
+        content: {
+          type: 'doc',
+          content: [1, 2, 3, 4, 5].map((level) => ({
+            type: 'heading',
+            attrs: { level },
+            content: [{ type: 'text', text: `标题 ${level}` }],
+          })),
+        },
+      }}
+    />,
+  );
+
+  for (let level = 1; level <= 5; level += 1) {
+    assert.match(html, new RegExp(`<h${level}[^>]*>.*标题 ${level}.*</h${level}>`));
+  }
+});
+
 test('Reader renders highlighted code with language and copy action', () => {
   const html = renderToStaticMarkup(
     <DocumentReader
@@ -110,6 +152,29 @@ test('Reader renders highlighted code with language and copy action', () => {
   assert.match(html, /复制/);
 });
 
+test('Reader 将历史 Mermaid 代码块按流程图渲染', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: '17',
+        title: '历史流程图',
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'codeBlock',
+              attrs: { language: 'mermaid' },
+              content: [{ type: 'text', text: 'flowchart LR\nA-->B' }],
+            },
+          ],
+        },
+      }}
+    />,
+  );
+  assert.match(html, /Mermaid 渲染中/);
+  assert.doesNotMatch(html, /data-code-language="mermaid"/);
+});
+
 test('Reader does not render dangerous persisted link protocols', () => {
   const html = renderToStaticMarkup(
     <DocumentReader
@@ -132,4 +197,30 @@ test('Reader does not render dangerous persisted link protocols', () => {
   );
   assert.doesNotMatch(html, /javascript:/i);
   assert.doesNotMatch(html, /target="_blank"/);
+});
+
+test('Reader 只渲染安全的对齐缩进和文本颜色', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: '16',
+        title: '格式文档',
+        content: {
+          type: 'doc',
+          content: [{
+            type: 'paragraph',
+            attrs: { textAlign: 'center', indent: 2 },
+            content: [{
+              type: 'text',
+              text: '安全颜色',
+              marks: [{ type: 'textStyle', attrs: { color: '#2563eb' } }],
+            }],
+          }],
+        },
+      }}
+    />,
+  );
+  assert.match(html, /text-align:center/);
+  assert.match(html, /margin-left:48px/);
+  assert.match(html, /color:#2563eb/);
 });

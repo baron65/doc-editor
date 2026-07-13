@@ -33,3 +33,9 @@ test('mermaid 围栏和 Markdown 表格转换为对应结构化节点', () => {
   assert.equal(result.content?.[0].attrs?.source, 'graph TD\nA-->B');
   assert.equal(result.content?.[1].type, 'table');
 });
+
+test('mermaid 围栏语言前后有空白时也转换为流程图节点', () => {
+  const result = parseMarkdownToDocument('``` mermaid \nflowchart LR\nA-->B\n```');
+  assert.equal(result.content?.[0].type, 'mermaid');
+  assert.equal(result.content?.[0].attrs?.source, 'flowchart LR\nA-->B');
+});

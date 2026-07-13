@@ -4,6 +4,8 @@ import type { DocumentContent } from '../../types/documentCenter';
 import { buildAssetUrl, formatFileSize, type AssetScope } from './assetPresentation';
 import { buildReaderContent, selectActiveHeadingId, type DocumentNavigationItem } from './readerModel';
 import { CodeBlock } from './CodeBlock';
+import { buildBlockTextStyle, normalizeTextColor } from '../content/blockFormatting';
+import { extractDocumentText, isMermaidLanguage } from '../content/mermaidContent';
 
 export interface ReaderDocument {
   documentId: string;
@@ -17,9 +19,16 @@ interface DocumentReaderProps {
   assetScope?: AssetScope;
   previous?: DocumentNavigationItem;
   next?: DocumentNavigationItem;
+  containedScroll?: boolean;
 }
 
-export function DocumentReader({ document, assetScope = 'published', previous, next }: DocumentReaderProps) {
+export function DocumentReader({
+  document,
+  assetScope = 'published',
+  previous,
+  next,
+  containedScroll = false,
+}: DocumentReaderProps) {
   const articleRef = useRef<HTMLElement>(null);
   const readerContent = useMemo(
     () => buildReaderContent(document?.content ?? { type: 'doc', content: [] }),
@@ -68,13 +77,18 @@ export function DocumentReader({ document, assetScope = 'published', previous, n
   }
 
   return (
-    <div className="flex min-w-0 items-start gap-4 xl:gap-6">
-      <article ref={articleRef} className="document-content min-w-0 flex-1 rounded-xl bg-white p-5 shadow-sm sm:p-6 lg:p-8">
+    <div className={`flex min-w-0 items-start gap-4 xl:gap-6 ${containedScroll ? 'h-full overflow-hidden' : ''}`}>
+      <article
+        ref={articleRef}
+        className={`document-content min-w-0 flex-1 rounded-xl bg-white p-5 shadow-sm sm:p-6 lg:p-8 ${
+          containedScroll ? 'h-full overflow-y-auto overscroll-contain' : ''
+        }`}
+      >
         <h1 className="mb-2 text-3xl font-semibold text-gray-950">{document.title}</h1>
         {document.publishedAt ? (
           <div className="mb-6 text-xs text-gray-400">最后发布：{formatPublishedAt(document.publishedAt)}</div>
         ) : <div className="mb-4" />}
-        <div className="space-y-3">
+        <div className="document-content-body space-y-3">
           {renderChildren(readerContent.content.content, document.documentId, assetScope)}
         </div>
         {previous || next ? (
@@ -85,7 +99,11 @@ export function DocumentReader({ document, assetScope = 'published', previous, n
         ) : null}
       </article>
       {readerContent.headings.length ? (
-        <aside className="sticky top-0 hidden max-h-[calc(100vh-4rem)] w-52 shrink-0 overflow-y-auto rounded-xl bg-white p-4 text-sm shadow-sm xl:block">
+        <aside
+          className={`sticky top-0 hidden w-52 shrink-0 overflow-y-auto rounded-xl bg-white p-4 text-sm shadow-sm xl:block ${
+            containedScroll ? 'max-h-full' : 'max-h-[calc(100vh-4rem)]'
+          }`}
+        >
           <div className="mb-3 font-medium text-gray-800">本页目录</div>
           <nav className="space-y-2" aria-label="页内目录">
             {readerContent.headings.map((heading) => (
@@ -120,16 +138,27 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
   const children = renderInlineChildren(node.content, documentId, assetScope);
   switch (node.type) {
     case 'paragraph':
-      return <p key={key}>{children}</p>;
+      return <p key={key} style={buildBlockTextStyle(node.attrs)}>{children}</p>;
     case 'heading': {
       const level = Number(node.attrs?.level ?? 2);
+      const headingProps = {
+        id: stringAttribute(node.attrs?.readerId),
+        'data-reader-heading-id': stringAttribute(node.attrs?.readerId),
+        style: buildBlockTextStyle(node.attrs),
+      };
       if (level === 1) {
-        return <h1 key={key}>{children}</h1>;
+        return <h1 {...headingProps} key={key}>{children}</h1>;
       }
       if (level === 3) {
-        return <h3 id={stringAttribute(node.attrs?.readerId)} data-reader-heading-id={stringAttribute(node.attrs?.readerId)} key={key}>{children}</h3>;
+        return <h3 {...headingProps} key={key}>{children}</h3>;
       }
-      return <h2 id={stringAttribute(node.attrs?.readerId)} data-reader-heading-id={stringAttribute(node.attrs?.readerId)} key={key}>{children}</h2>;
+      if (level === 4) {
+        return <h4 {...headingProps} key={key}>{children}</h4>;
+      }
+      if (level === 5) {
+        return <h5 {...headingProps} key={key}>{children}</h5>;
+      }
+      return <h2 {...headingProps} key={key}>{children}</h2>;
     }
     case 'bulletList':
       return <ul key={key}>{renderChildren(node.content, documentId, assetScope)}</ul>;
@@ -140,6 +169,9 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
     case 'blockquote':
       return <blockquote key={key}>{renderChildren(node.content, documentId, assetScope)}</blockquote>;
     case 'codeBlock':
+      if (isMermaidLanguage(node.attrs?.language)) {
+        return renderMermaid({ type: 'mermaid', attrs: { source: extractDocumentText(node) } }, key);
+      }
       return <CodeBlock key={key} code={extractText(node)} language={stringAttribute(node.attrs?.language)} />;
     case 'table':
       return (
@@ -208,6 +240,10 @@ function applyMarks(text: string, node: DocumentContent, key: number): ReactNode
             {current}
           </a>
         );
+      }
+      case 'textStyle': {
+        const color = normalizeTextColor(mark.attrs?.color);
+        return color ? <span key={key} style={{ color }}>{current}</span> : current;
       }
       default:
         return current;
