@@ -58,14 +58,42 @@ pnpm start
 
 ## Docker 本机依赖
 
-当前工程只使用 Docker 启动本机依赖：
+当前工程的开发编排只使用 Docker 启动本机依赖：
 
 - `mysql` 使用 `mysql:8.0.33`，初始化执行 [schema.sql](/Users/baron/code/doc-editor/backend/src/main/resources/db/schema.sql)。
 - MySQL 容器端口映射到宿主机 `13306`，避免和本机已有 MySQL `3306` 冲突。
 - `minio` 使用 `quay.io/minio/minio:latest`，提供 S3 兼容对象存储。
 - MinIO API 端口映射到宿主机 `19000`，Console 端口映射到 `19001`。
 - MinIO 本地账号为 `document-center` / `document-center-secret`，bucket 默认由后端启动时自动创建为 `document-center`。
-- 后端和前端都在本地启动，不提供项目内 Dockerfile 和应用容器编排。
+- 后端和前端开发时在本地启动；生产环境使用独立应用镜像和 `docker-compose.prod.yml`。
+
+## 腾讯云生产部署
+
+生产 compose 只负责拉取镜像并编排服务，不在服务器上执行构建。前端容器使用 Nginx 提供静态页面，并将 `/api` 反向代理到后端容器。
+
+### 构建并推送前后端镜像
+
+在项目根目录执行：
+
+```bash
+docker build -f backend/Dockerfile -t ccr.ccs.tencentyun.com/baron/doc-editor-backend:latest backend
+docker push ccr.ccs.tencentyun.com/baron/doc-editor-backend:latest
+
+docker build -f frontend/Dockerfile -t ccr.ccs.tencentyun.com/baron/doc-editor-frontend:latest frontend
+docker push ccr.ccs.tencentyun.com/baron/doc-editor-frontend:latest
+```
+
+### 服务器启动
+
+将 [.env.production.example](/Users/baron/code/doc-editor/.env.production.example) 复制为服务器上的 `.env`，填写数据库和 MinIO 实际凭据，然后执行：
+
+```bash
+docker login ccr.ccs.tencentyun.com
+docker compose --env-file .env -f docker-compose.prod.yml pull
+docker compose --env-file .env -f docker-compose.prod.yml up -d
+```
+
+默认对外提供 `80` 端口，可通过 `DOCUMENT_CENTER_HTTP_PORT` 修改。生产编排默认使用腾讯云仓库中的 MySQL、MinIO、后端和前端镜像；如果 MySQL/MinIO 已由腾讯云其他服务独立运行，可在 `.env` 中将后端的连接配置改为对应地址，并移除 compose 中不需要的依赖服务。
 
 常用验证命令：
 
@@ -87,6 +115,6 @@ git diff --check
 
 ## 当前未完成项
 
-- 当前工程不再提供前后端 Docker 镜像构建；Docker 仅用于启动 MySQL 和 MinIO 依赖。
+- 前后端 Dockerfile 分别位于 [backend/Dockerfile](/Users/baron/code/doc-editor/backend/Dockerfile) 和 [frontend/Dockerfile](/Users/baron/code/doc-editor/frontend/Dockerfile)；开发 compose 与生产 compose 分离。
 - Mermaid 10.7.0 已锁定并接入编辑器/Reader；Umi 构建兼容配置已写入 `frontend/config/config.ts`。
 - 下载审计、企业鉴权接入和更细的缓存策略仍是后续开发项；资源元数据落库、DRAFT/PUBLISHED 引用替换、二进制下载流和下载响应头骨架已完成。
