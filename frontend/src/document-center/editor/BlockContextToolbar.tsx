@@ -534,7 +534,11 @@ export function BlockContextToolbar({
               openMenu();
             }}
           >
-            {presentation.icon}
+            <BlockHandleIcon
+              empty={target.empty}
+              fallback={presentation.icon}
+              type={target.type}
+            />
           </button>
           {menuOpen ? (
             <div
@@ -793,6 +797,30 @@ function BlockToolIcon({ type }: { type: string }) {
       {type === 'delete' ? <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></> : null}
     </svg>
   );
+}
+
+function BlockHandleIcon({
+  empty,
+  fallback,
+  type,
+}: {
+  empty: boolean;
+  fallback: string;
+  type: string;
+}) {
+  if (empty) return <>{fallback}</>;
+
+  const toolbarIconType = ({
+    bulletList: 'bullet-list',
+    orderedList: 'ordered-list',
+    taskList: 'task-list',
+    blockquote: 'quote',
+    codeBlock: 'code',
+  } as Record<string, string>)[type];
+
+  return toolbarIconType
+    ? <BlockToolIcon type={toolbarIconType} />
+    : <>{fallback}</>;
 }
 
 function alignmentIcon(align: string) {

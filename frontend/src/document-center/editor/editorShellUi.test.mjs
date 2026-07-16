@@ -123,6 +123,8 @@ test('气泡采用窄宽度并优先向正文外侧展开', () => {
 
 test('列表引用代码使用语义图标并提供 hover 级联格式菜单', () => {
   assert.match(blockToolbarSource, /BlockToolIcon/);
+  assert.match(blockToolbarSource, /BlockHandleIcon/);
+  assert.match(blockToolbarSource, /bulletList: 'bullet-list'/);
   assert.match(blockToolbarSource, /bulletList/);
   assert.match(blockToolbarSource, /orderedList/);
   assert.match(blockToolbarSource, /blockquote/);
@@ -139,7 +141,7 @@ test('块菜单支持复制和删除精确节点', () => {
   assert.doesNotMatch(blockToolbarSource, /insertContentAt\(target\.end, target\.node\.toJSON\(\)\)/);
   assert.match(blockToolbarSource, /deleteTargetNode/);
   assert.match(blockToolbarSource, /target\.node\.toJSON\(\)/);
-  assert.match(blockToolbarSource, /from: target\.pos, to: target\.end/);
+  assert.match(blockToolbarSource, /\.delete\(target\.pos, target\.end\)/);
 });
 
 test('块菜单补齐任务清单、字号、下划线和删除线工具', () => {
