@@ -27,6 +27,7 @@ import type { CalloutKind } from '../callout/CalloutExtension';
 import { blockHighlightPluginKey } from './BlockHighlightExtension';
 import {
   SAFE_FONT_SIZES,
+  SAFE_TEXT_BACKGROUND_COLORS,
   SAFE_TEXT_COLORS,
   normalizeBlockIndent,
   type BlockTextAlign,
@@ -64,6 +65,7 @@ interface BlockTarget {
 }
 
 type CascadeMenuView = 'alignment' | 'color' | 'fontSize';
+type SelectionFormatMenuView = 'color' | 'backgroundColor';
 
 interface CascadeMenuState {
   view: CascadeMenuView;
@@ -75,6 +77,12 @@ interface TablePickerState {
   top: number;
   left: number;
   selectionPos: number;
+}
+
+interface SelectionFormatMenuState {
+  view: SelectionFormatMenuView;
+  top: number;
+  left: number;
 }
 
 export function BlockContextToolbar({
@@ -94,6 +102,7 @@ export function BlockContextToolbar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [cascadeMenu, setCascadeMenu] = useState<CascadeMenuState>();
   const [selectionMenu, setSelectionMenu] = useState<{ top: number; left: number }>();
+  const [selectionFormatMenu, setSelectionFormatMenu] = useState<SelectionFormatMenuState>();
   const [tablePicker, setTablePicker] = useState<TablePickerState>();
   const closeMenuTimerRef = useRef<number>();
   const isMac = isMacPlatform();
@@ -106,6 +115,7 @@ export function BlockContextToolbar({
       const { from, to, empty } = editor.state.selection;
       if (empty || disabled) {
         setSelectionMenu(undefined);
+        setSelectionFormatMenu(undefined);
         return;
       }
       const start = editor.view.coordsAtPos(from);
@@ -115,7 +125,10 @@ export function BlockContextToolbar({
         left: Math.max(8, Math.min(window.innerWidth - 250, (start.left + end.right) / 2 - 120)),
       });
     };
-    const hideSelectionMenu = () => setSelectionMenu(undefined);
+    const hideSelectionMenu = () => {
+      setSelectionMenu(undefined);
+      setSelectionFormatMenu(undefined);
+    };
     editor.on('selectionUpdate', updateSelectionMenu);
     editor.on('blur', hideSelectionMenu);
     return () => {
@@ -438,6 +451,26 @@ export function BlockContextToolbar({
     });
   };
 
+  const applySelectionTextStyle = (patch: { color?: string | null; backgroundColor?: string | null }) => {
+    const { from, to } = editor.state.selection;
+    if (from === to) return;
+    updateTextStyleMark(editor, { from, to }, patch);
+    setSelectionFormatMenu(undefined);
+  };
+
+  const openSelectionFormatMenu = (
+    view: SelectionFormatMenuView,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 184;
+    setSelectionFormatMenu({
+      view,
+      top: Math.min(window.innerHeight - 56, rect.bottom + 6),
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+    });
+  };
+
   const copyTargetNode = () => {
     if (!target) return;
     run(() => {
@@ -557,7 +590,7 @@ export function BlockContextToolbar({
                   shortcut={shortcutLabel('paragraph')}
                   onRun={() => run(() => focusTarget().setParagraph().run())}
                 />
-                {([1, 2, 3, 4, 5] as const).map((level) => (
+                {([1, 2, 3] as const).map((level) => (
                   <MenuButton
                     key={level}
                     compact
@@ -568,11 +601,11 @@ export function BlockContextToolbar({
                     onRun={() => run(() => focusTarget().toggleHeading({ level }).run())}
                   />
                 ))}
-                <MenuButton compact active={target.type === 'bulletList'} icon={<BlockToolIcon type="bullet-list" />} label="列表" shortcut={shortcutLabel('bulletList')} onRun={() => run(() => focusTarget().toggleBulletList().run())} />
                 <MenuButton compact active={target.type === 'orderedList'} icon={<BlockToolIcon type="ordered-list" />} label="编号" shortcut={shortcutLabel('orderedList')} onRun={() => run(() => focusTarget().toggleOrderedList().run())} />
+                <MenuButton compact active={target.type === 'bulletList'} icon={<BlockToolIcon type="bullet-list" />} label="列表" shortcut={shortcutLabel('bulletList')} onRun={() => run(() => focusTarget().toggleBulletList().run())} />
                 <MenuButton compact active={target.type === 'taskList'} icon={<BlockToolIcon type="task-list" />} label="任务" shortcut={shortcutLabel('taskList')} onRun={() => run(() => focusTarget().toggleTaskList().run())} />
-                <MenuButton compact active={target.type === 'blockquote'} icon={<BlockToolIcon type="quote" />} label="引用" shortcut={shortcutLabel('blockquote')} onRun={() => run(() => focusTarget().toggleBlockquote().run())} />
                 <MenuButton compact active={target.type === 'codeBlock'} icon={<BlockToolIcon type="code" />} label="代码块" shortcut={shortcutLabel('codeBlock')} onRun={() => run(() => onInsertCodeBlock(target.selectionPos))} />
+                <MenuButton compact active={target.type === 'blockquote'} icon={<BlockToolIcon type="quote" />} label="引用" shortcut={shortcutLabel('blockquote')} onRun={() => run(() => focusTarget().toggleBlockquote().run())} />
               </MenuGroup>
               <MenuGroup label="格式">
                 <MenuButton hasSubmenu icon={<BlockToolIcon type="align-left" />} label="缩进和对齐" shortcut={shortcutLabel('alignLeft')} onHover={(event) => openCascadeMenu('alignment', event)} onRun={() => undefined} />
@@ -666,12 +699,26 @@ export function BlockContextToolbar({
           style={selectionMenu}
           aria-label="文字格式工具栏"
         >
-          <InlineButton active={editor.isActive('bold')} label="加粗" shortcut={shortcutLabel('bold')} onRun={() => editor.chain().focus().toggleBold().run()} />
-          <InlineButton active={editor.isActive('italic')} label="斜体" shortcut={shortcutLabel('italic')} onRun={() => editor.chain().focus().toggleItalic().run()} />
-          <InlineButton active={editor.isActive('underline')} label="下划线" shortcut={shortcutLabel('underline')} onRun={() => editor.chain().focus().toggleUnderline().run()} />
-          <InlineButton active={editor.isActive('strike')} label="删除线" shortcut={shortcutLabel('strike')} onRun={() => editor.chain().focus().toggleStrike().run()} />
-          <InlineButton active={editor.isActive('link')} label="链接" shortcut={shortcutLabel('link')} onRun={onSetLink} />
+          <InlineButton active={editor.isActive('code')} icon={<InlineToolIcon type="code" />} label="行内代码" shortcut={shortcutLabel('codeBlock')} onRun={() => editor.chain().focus().toggleCode().run()} />
+          <span className="mx-0.5 h-5 w-px bg-gray-200" aria-hidden="true" />
+          <InlineButton active={editor.isActive('bold')} icon={<InlineToolIcon type="bold" />} label="加粗" shortcut={shortcutLabel('bold')} onRun={() => editor.chain().focus().toggleBold().run()} />
+          <InlineButton active={editor.isActive('italic')} icon={<InlineToolIcon type="italic" />} label="斜体" shortcut={shortcutLabel('italic')} onRun={() => editor.chain().focus().toggleItalic().run()} />
+          <InlineButton active={editor.isActive('strike')} icon={<InlineToolIcon type="strike" />} label="删除线" shortcut={shortcutLabel('strike')} onRun={() => editor.chain().focus().toggleStrike().run()} />
+          <InlineButton active={editor.isActive('underline')} icon={<InlineToolIcon type="underline" />} label="下划线" shortcut={shortcutLabel('underline')} onRun={() => editor.chain().focus().toggleUnderline().run()} />
+          <InlineButton active={editor.isActive('link')} icon={<InlineToolIcon type="link" />} label="链接" shortcut={shortcutLabel('link')} onRun={onSetLink} />
+          <InlineButton icon={<InlineToolIcon type="text-color" />} label="文字颜色" shortcut={shortcutLabel('colorDefault')} onRun={openSelectionFormatMenu.bind(null, 'color')} />
+          <InlineButton icon={<InlineToolIcon type="background-color" />} label="背景颜色" shortcut={shortcutLabel('backgroundColorDefault')} onRun={openSelectionFormatMenu.bind(null, 'backgroundColor')} />
         </div>
+      ) : null}
+      {selectionFormatMenu ? (
+        <InlineColorPalette
+          colors={selectionFormatMenu.view === 'color' ? SAFE_TEXT_COLORS : SAFE_TEXT_BACKGROUND_COLORS}
+          label={selectionFormatMenu.view === 'color' ? '文字颜色' : '背景颜色'}
+          position={selectionFormatMenu}
+          onSelect={(color) => applySelectionTextStyle(
+            selectionFormatMenu.view === 'color' ? { color } : { backgroundColor: color },
+          )}
+        />
       ) : null}
       {tablePicker ? (
         <TableSizePicker
@@ -747,7 +794,7 @@ function MenuButton({
     <button
       aria-label={`${label}，快捷键 ${shortcut}`}
       title={`${label} · ${shortcut}`}
-      className={`${compact ? 'flex h-11 items-center justify-center rounded-lg px-1 text-base' : 'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm'} ${
+      className={`${compact ? 'group relative flex h-11 items-center justify-center rounded-lg px-1 text-base' : 'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm'} ${
         danger
           ? 'text-red-700 hover:bg-red-50'
           : active
@@ -764,6 +811,12 @@ function MenuButton({
         <>
           <span aria-hidden="true">{icon ?? label}</span>
           <span className="sr-only">{label}，{shortcut}</span>
+          <span
+            className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden w-max max-w-48 -translate-x-1/2 rounded-md bg-gray-900 px-2 py-1 text-center text-[11px] font-normal leading-4 text-white shadow-lg group-focus-visible:block group-hover:block"
+            role="tooltip"
+          >
+            {label} · {shortcut}
+          </span>
         </>
       ) : (
         <>
@@ -785,8 +838,8 @@ function BlockToolIcon({ type }: { type: string }) {
     <svg {...common} aria-hidden="true">
       {type === 'bullet-list' ? <><circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />{lines}</> : null}
       {type === 'ordered-list' ? <><path d="M3 5h2v3M3 11h2l-2 3h2M3 17h2l-2 2h2" />{lines}</> : null}
-      {type === 'task-list' ? <><rect x="3" y="4" width="3" height="3" rx=".5" /><path d="m3.5 12 1 1 2-2M9 6h11M9 12h11M9 18h11" /><rect x="3" y="17" width="3" height="3" rx=".5" /></> : null}
-      {type === 'quote' ? <path d="M5 7h5v5H6c0 3-1 4-3 5M14 7h5v5h-4c0 3-1 4-3 5" /> : null}
+      {type === 'task-list' ? <><rect x="3" y="4" width="5" height="5" rx="1" /><path d="m4.4 6.5 1.2 1.2 2-2M11 6.5h9M11 12h9M11 17.5h9" /></> : null}
+      {type === 'quote' ? <path d="M7 7H4v5h4v-2H6c0-1.5.4-2.4 1-3M17 7h-3v5h4v-2h-2c0-1.5.4-2.4 1-3" strokeWidth="2.2" /> : null}
       {type === 'code' ? <path d="m8 5-4 7 4 7M16 5l4 7-4 7M14 3l-4 18" /> : null}
       {type.startsWith('align-') ? alignmentIcon(type.slice(6)) : null}
       {type === 'indent-increase' ? <>{lines}<path d="m3 9 3 3-3 3" /></> : null}
@@ -872,26 +925,88 @@ function InlineButton({
   label,
   shortcut,
   active,
+  icon,
   onRun,
 }: {
   label: string;
   shortcut: string;
   active?: boolean;
-  onRun: () => void;
+  icon: ReactNode;
+  onRun: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <button
       aria-label={`${label}，快捷键 ${shortcut}`}
       title={`${label} · ${shortcut}`}
-      className={`rounded px-2 py-1.5 text-xs ${active ? 'bg-brand-50 text-brand-700' : 'text-gray-700 hover:bg-gray-50'}`}
+      className={`group relative flex h-8 w-8 items-center justify-center rounded-md ${active ? 'bg-brand-50 text-brand-700' : 'text-gray-700 hover:bg-gray-50'}`}
       type="button"
       onMouseDown={(event) => {
         event.preventDefault();
-        onRun();
+        onRun(event);
       }}
     >
-      {label}
+      <span aria-hidden="true">{icon}</span>
+      <span className="sr-only">{label}，{shortcut}</span>
+      <span
+        className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden w-max max-w-48 -translate-x-1/2 rounded-md bg-gray-900 px-2 py-1 text-center text-[11px] font-normal leading-4 text-white shadow-lg group-focus-visible:block group-hover:block"
+        role="tooltip"
+      >
+        {label} · {shortcut}
+      </span>
     </button>
+  );
+}
+
+function InlineToolIcon({ type }: { type: 'bold' | 'italic' | 'strike' | 'underline' | 'link' | 'code' | 'text-color' | 'background-color' }) {
+  const common = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  return (
+    <svg {...common} aria-hidden="true">
+      {type === 'bold' ? <path d="M7 4h6a4 4 0 0 1 0 8H7zm0 8h7a4 4 0 0 1 0 8H7z" /> : null}
+      {type === 'italic' ? <><path d="M10 4h8M6 20h8M14 4 10 20" /></> : null}
+      {type === 'strike' ? <><path d="M8 5c1-1 2.4-1.5 4-1.5 2.8 0 4.5 1.4 4.5 3.5M7 17c1 2.2 3 3.5 5.5 3.5 2.7 0 4.5-1.4 4.5-3.5" /><path d="M4 12h16" /></> : null}
+      {type === 'underline' ? <><path d="M8 4v7a4 4 0 0 0 8 0V4M6 20h12" /></> : null}
+      {type === 'link' ? <><path d="M10 13.5a4 4 0 0 0 5.7.1l2-2a4 4 0 0 0-5.7-5.7l-1.1 1.1" /><path d="M14 10.5a4 4 0 0 0-5.7-.1l-2 2A4 4 0 0 0 12 18.1l1.1-1.1" /></> : null}
+      {type === 'code' ? <><path d="m9 5-4 7 4 7M15 5l4 7-4 7" /></> : null}
+      {type === 'text-color' ? <><path d="m6 17 5-11h2l5 11M8.2 13h7.6" /><path d="M5 21h14" stroke="#2563eb" strokeWidth="3" /></> : null}
+      {type === 'background-color' ? <><rect x="4" y="3" width="16" height="18" rx="2" fill="#fff2cc" stroke="none" /><path d="m7 17 5-11h2l5 11M9.2 13h5.6" stroke="#1f2937" /></> : null}
+    </svg>
+  );
+}
+
+function InlineColorPalette({
+  colors,
+  label,
+  position,
+  onSelect,
+}: {
+  colors: ReadonlyArray<{ label: string; value: string | null }>;
+  label: string;
+  position: { top: number; left: number };
+  onSelect: (color: string | null) => void;
+}) {
+  return (
+    <div
+      aria-label={label}
+      className="fixed z-50 flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1.5 shadow-xl"
+      role="menu"
+      style={position}
+    >
+      {colors.map((color) => (
+        <button
+          key={color.value ?? 'default'}
+          aria-label={color.label}
+          className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          title={color.label}
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            onSelect(color.value);
+          }}
+        >
+          <ColorSwatch color={color.value} />
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -911,7 +1026,7 @@ function calloutShortcutName(kind: CalloutKind): BlockShortcutName {
 function updateTextStyleMark(
   editor: Editor,
   range: { from: number; to: number },
-  patch: { color?: string | null; fontSize?: string | null },
+  patch: { color?: string | null; fontSize?: string | null; backgroundColor?: string | null },
 ) {
   const markType = editor.state.schema.marks.textStyle;
   if (!markType) {
@@ -1117,6 +1232,12 @@ function runShortcutAction(
         colorGreen: '#16a34a', colorBlue: '#2563eb', colorPurple: '#9333ea',
       }[name];
       return updateTextStyleMark(editor, range, { color });
+    }
+    case 'backgroundColorDefault': {
+      const { from, to } = editor.state.selection;
+      const range = from === to ? getDocumentBlockTextRange(block) : { from, to };
+      if (!range || range.from === range.to) return false;
+      return updateTextStyleMark(editor, range, { backgroundColor: '#fff2cc' });
     }
     case 'fontSizeSmall':
     case 'fontSizeBody':

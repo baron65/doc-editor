@@ -64,6 +64,7 @@ export const BLOCK_SHORTCUTS = {
   colorGreen: { code: 'KeyN', alt: true, shift: true },
   colorBlue: { code: 'KeyU', alt: true, shift: true },
   colorPurple: { code: 'KeyV', alt: true, shift: true },
+  backgroundColorDefault: { code: 'KeyH', alt: true, shift: true },
   duplicateNode: { code: 'KeyD', shift: true },
   deleteNode: { code: 'Backspace', shift: true },
 } as const satisfies Record<string, BlockShortcut>;

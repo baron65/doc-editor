@@ -88,9 +88,12 @@ test('块手柄按鼠标坐标命中当前块并使用单列工具箱', () => {
   assert.doesNotMatch(blockToolbarSource, /grid grid-cols-3/);
 });
 
-test('块工具箱提供 H1 到 H5 标题级别', () => {
-  assert.match(blockToolbarSource, /\[1, 2, 3, 4, 5\]/);
+test('块工具箱只展示 H1 到 H3，H4/H5 保留快捷键入口', () => {
+  assert.match(blockToolbarSource, /\[1, 2, 3\]/);
+  assert.doesNotMatch(blockToolbarSource, /\[1, 2, 3, 4, 5\]/);
   assert.match(blockToolbarSource, /label=\{`H\$\{level\}`\}/);
+  assert.match(blockToolbarSource, /heading4/);
+  assert.match(blockToolbarSource, /heading5/);
 });
 
 test('常用块类型采用飞书式横向紧凑工具区', () => {
@@ -105,6 +108,21 @@ test('块菜单展示并执行编辑器范围内的快捷键', () => {
   assert.match(blockToolbarSource, /matchesBlockShortcut/);
   assert.match(blockToolbarSource, /addEventListener\('keydown'/);
   assert.match(blockToolbarSource, /shortcut=/);
+  assert.match(blockToolbarSource, /role="tooltip"/);
+  assert.match(blockToolbarSource, /\{label\} · \{shortcut\}/);
+});
+
+test('选中文本工具栏使用图标并提供文本和背景色工具', () => {
+  assert.match(blockToolbarSource, /InlineToolIcon/);
+  assert.match(blockToolbarSource, /type="bold"/);
+  assert.match(blockToolbarSource, /type="italic"/);
+  assert.match(blockToolbarSource, /type="strike"/);
+  assert.match(blockToolbarSource, /type="underline"/);
+  assert.match(blockToolbarSource, /type="link"/);
+  assert.match(blockToolbarSource, /type="text-color"/);
+  assert.match(blockToolbarSource, /type="background-color"/);
+  assert.match(blockToolbarSource, /SAFE_TEXT_BACKGROUND_COLORS/);
+  assert.match(blockToolbarSource, /selectionFormatMenu/);
 });
 
 test('鼠标进入手柄时临时高亮目标节点', () => {

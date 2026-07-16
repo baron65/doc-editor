@@ -8,6 +8,15 @@ export const SAFE_TEXT_COLORS = [
   { label: '紫色', value: '#9333ea' },
 ] as const;
 
+export const SAFE_TEXT_BACKGROUND_COLORS = [
+  { label: '默认', value: null },
+  { label: '黄色', value: '#fff2cc' },
+  { label: '蓝色', value: '#dbeafe' },
+  { label: '绿色', value: '#dcfce7' },
+  { label: '红色', value: '#fee2e2' },
+  { label: '紫色', value: '#f3e8ff' },
+] as const;
+
 export const SAFE_FONT_SIZES = [
   { label: '小号', value: '12px' },
   { label: '正文', value: '14px' },
@@ -20,6 +29,9 @@ export type BlockTextAlign = 'left' | 'center' | 'right' | 'justify';
 
 const SAFE_TEXT_COLOR_VALUES = new Set<string>(
   SAFE_TEXT_COLORS.flatMap(({ value }) => value ? [value] : []),
+);
+const SAFE_TEXT_BACKGROUND_COLOR_VALUES = new Set<string>(
+  SAFE_TEXT_BACKGROUND_COLORS.flatMap(({ value }) => value ? [value] : []),
 );
 const SAFE_FONT_SIZE_VALUES = new Set<string>(SAFE_FONT_SIZES.map(({ value }) => value));
 
@@ -39,6 +51,10 @@ export function normalizeBlockIndent(value: unknown) {
 
 export function normalizeTextColor(value: unknown): string | null {
   return typeof value === 'string' && SAFE_TEXT_COLOR_VALUES.has(value) ? value : null;
+}
+
+export function normalizeTextBackgroundColor(value: unknown): string | null {
+  return typeof value === 'string' && SAFE_TEXT_BACKGROUND_COLOR_VALUES.has(value) ? value : null;
 }
 
 export function normalizeFontSize(value: unknown): string | null {

@@ -57,6 +57,16 @@ class DocumentContentAbilityTest {
     }
 
     @Test
+    void acceptsControlledTextBackgroundColor() {
+        DocumentContentAbility ability = new DocumentContentAbility();
+        String content = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{"
+                + "\"type\":\"text\",\"text\":\"高亮\",\"marks\":[{\"type\":\"textStyle\","
+                + "\"attrs\":{\"backgroundColor\":\"#fff2cc\"}}]}]}]}";
+
+        assertThat(ability.validateDraftContent(1, content).isValid()).isTrue();
+    }
+
+    @Test
     void rejectsUnsupportedFontSize() {
         DocumentContentAbility ability = new DocumentContentAbility();
         String content = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{"

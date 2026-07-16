@@ -30,6 +30,8 @@ public class DocumentContentAbility {
     private static final Set<String> ALLOWED_TEXT_ALIGNMENTS = Set.of("left", "center", "right", "justify");
     private static final Set<String> ALLOWED_TEXT_COLORS = Set.of(
             "#4b5563", "#dc2626", "#ea580c", "#16a34a", "#2563eb", "#9333ea");
+    private static final Set<String> ALLOWED_TEXT_BACKGROUND_COLORS = Set.of(
+            "#fff2cc", "#dbeafe", "#dcfce7", "#fee2e2", "#f3e8ff");
     private static final Set<String> ALLOWED_FONT_SIZES = Set.of(
             "12px", "14px", "16px", "18px", "20px");
 
@@ -139,7 +141,7 @@ public class DocumentContentAbility {
                 throw new ValidationFailure("text style attributes are required");
             }
             Map<String, Object> styleAttrs = (Map<String, Object>) attrs;
-            if (!Set.of("color", "fontSize").containsAll(styleAttrs.keySet())) {
+            if (!Set.of("color", "fontSize", "backgroundColor").containsAll(styleAttrs.keySet())) {
                 throw new ValidationFailure("unsupported text style attribute");
             }
             boolean hasStyle = false;
@@ -154,6 +156,13 @@ public class DocumentContentAbility {
             if (fontSize != null) {
                 if (!(fontSize instanceof String) || !ALLOWED_FONT_SIZES.contains(fontSize)) {
                     throw new ValidationFailure("unsupported font size");
+                }
+                hasStyle = true;
+            }
+            Object backgroundColor = styleAttrs.get("backgroundColor");
+            if (backgroundColor != null) {
+                if (!(backgroundColor instanceof String) || !ALLOWED_TEXT_BACKGROUND_COLORS.contains(backgroundColor)) {
+                    throw new ValidationFailure("unsupported text background color");
                 }
                 hasStyle = true;
             }

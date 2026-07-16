@@ -4,6 +4,7 @@ import {
   normalizeBlockIndent,
   normalizeBlockTextAlign,
   normalizeFontSize,
+  normalizeTextBackgroundColor,
   normalizeTextColor,
 } from '../content/blockFormatting';
 
@@ -14,6 +15,8 @@ declare module '@tiptap/core' {
       unsetTextColor: () => ReturnType;
       setFontSize: (fontSize: string) => ReturnType;
       unsetFontSize: () => ReturnType;
+      setTextBackgroundColor: (backgroundColor: string) => ReturnType;
+      unsetTextBackgroundColor: () => ReturnType;
     };
   }
 }
@@ -40,11 +43,26 @@ const TextColorMark = Mark.create({
           return safeFontSize ? { 'data-font-size': safeFontSize, style: `font-size: ${safeFontSize}` } : {};
         },
       },
+      backgroundColor: {
+        default: null,
+        parseHTML: (element) => normalizeTextBackgroundColor(element.getAttribute('data-background-color') ?? element.style.backgroundColor),
+        renderHTML: ({ backgroundColor }) => {
+          const safeBackgroundColor = normalizeTextBackgroundColor(backgroundColor);
+          return safeBackgroundColor ? { 'data-background-color': safeBackgroundColor, style: `background-color: ${safeBackgroundColor}` } : {};
+        },
+      },
     };
   },
 
   parseHTML() {
-    return [{ tag: 'span[data-text-color]' }, { tag: 'span[data-font-size]' }, { style: 'color' }, { style: 'font-size' }];
+    return [
+      { tag: 'span[data-text-color]' },
+      { tag: 'span[data-font-size]' },
+      { tag: 'span[data-background-color]' },
+      { style: 'color' },
+      { style: 'font-size' },
+      { style: 'background-color' },
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {
@@ -63,6 +81,11 @@ const TextColorMark = Mark.create({
         return Boolean(safeFontSize) && commands.setMark(this.name, { fontSize: safeFontSize });
       },
       unsetFontSize: () => ({ commands }) => commands.unsetMark(this.name),
+      setTextBackgroundColor: (backgroundColor) => ({ commands }) => {
+        const safeBackgroundColor = normalizeTextBackgroundColor(backgroundColor);
+        return Boolean(safeBackgroundColor) && commands.setMark(this.name, { backgroundColor: safeBackgroundColor });
+      },
+      unsetTextBackgroundColor: () => ({ commands }) => commands.unsetMark(this.name),
     };
   },
 });

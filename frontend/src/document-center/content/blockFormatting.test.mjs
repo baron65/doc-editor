@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   SAFE_TEXT_COLORS,
+  SAFE_TEXT_BACKGROUND_COLORS,
   SAFE_FONT_SIZES,
   buildBlockTextAlignHtmlAttributes,
   buildBlockTextStyle,
@@ -9,6 +10,7 @@ import {
   normalizeBlockTextAlign,
   normalizeFontSize,
   normalizeTextColor,
+  normalizeTextBackgroundColor,
 } from './blockFormatting.ts';
 
 test('缩进限制在 0 到 6 级且对齐只接受安全枚举', () => {
@@ -24,6 +26,13 @@ test('文本颜色只接受固定安全色板', () => {
   assert.equal(normalizeTextColor('#2563eb'), '#2563eb');
   assert.equal(normalizeTextColor('red'), null);
   assert.equal(normalizeTextColor('url(javascript:alert(1))'), null);
+});
+
+test('文本背景色只接受固定安全色板', () => {
+  assert.equal(SAFE_TEXT_BACKGROUND_COLORS.length, 6);
+  assert.equal(normalizeTextBackgroundColor('#fff2cc'), '#fff2cc');
+  assert.equal(normalizeTextBackgroundColor('yellow'), null);
+  assert.equal(normalizeTextBackgroundColor('url(javascript:alert(1))'), null);
 });
 
 test('字号只接受固定安全字号', () => {

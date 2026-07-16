@@ -4,7 +4,7 @@ import type { DocumentContent } from '../../types/documentCenter';
 import { buildAssetUrl, formatFileSize, type AssetScope } from './assetPresentation';
 import { buildReaderContent, selectActiveHeadingId, type DocumentNavigationItem } from './readerModel';
 import { CodeBlock } from './CodeBlock';
-import { buildBlockTextStyle, normalizeFontSize, normalizeTextColor } from '../content/blockFormatting';
+import { buildBlockTextStyle, normalizeFontSize, normalizeTextBackgroundColor, normalizeTextColor } from '../content/blockFormatting';
 import { extractDocumentText, isMermaidLanguage } from '../content/mermaidContent';
 
 export interface ReaderDocument {
@@ -254,7 +254,8 @@ function applyMarks(text: string, node: DocumentContent, key: number): ReactNode
       case 'textStyle': {
         const color = normalizeTextColor(mark.attrs?.color);
         const fontSize = normalizeFontSize(mark.attrs?.fontSize);
-        return color || fontSize ? <span key={key} style={{ color: color ?? undefined, fontSize: fontSize ?? undefined }}>{current}</span> : current;
+        const backgroundColor = normalizeTextBackgroundColor(mark.attrs?.backgroundColor);
+        return color || fontSize || backgroundColor ? <span key={key} style={{ color: color ?? undefined, fontSize: fontSize ?? undefined, backgroundColor: backgroundColor ?? undefined }}>{current}</span> : current;
       }
       default:
         return current;

@@ -252,3 +252,31 @@ test('Reader 只渲染安全字号', () => {
   assert.match(html, /font-size:18px/);
   assert.doesNotMatch(html, /calc\(100vw\)/);
 });
+
+test('Reader 渲染安全文本背景色并忽略非法值', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: '19',
+        title: '背景色文档',
+        content: {
+          type: 'doc',
+          content: [{
+            type: 'paragraph',
+            content: [{
+              type: 'text',
+              text: '高亮文本',
+              marks: [{ type: 'textStyle', attrs: { backgroundColor: '#fff2cc' } }],
+            }, {
+              type: 'text',
+              text: '非法背景',
+              marks: [{ type: 'textStyle', attrs: { backgroundColor: 'url(javascript:alert(1))' } }],
+            }],
+          }],
+        },
+      }}
+    />,
+  );
+  assert.match(html, /background-color:#fff2cc/);
+  assert.doesNotMatch(html, /javascript:alert/);
+});
