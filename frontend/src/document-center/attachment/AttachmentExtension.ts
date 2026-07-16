@@ -35,14 +35,20 @@ export const AttachmentExtension = Node.create({
   },
 
   renderHTML({ HTMLAttributes, node }) {
+    const fileBadge = getFileBadge(node.attrs.originalName, node.attrs.mimeType);
     return [
       'div',
       mergeAttributes(HTMLAttributes, {
         'data-type': 'attachment',
-        class: 'attachment-node rounded-xl border border-gray-200 bg-gray-50 p-4',
+        class: 'attachment-card',
       }),
-      ['div', { class: 'font-medium text-gray-800' }, node.attrs.originalName],
-      ['div', { class: 'mt-1 text-xs text-gray-500' }, `${node.attrs.mimeType} · ${formatFileSize(node.attrs.sizeBytes)}`],
+      ['div', { class: 'attachment-card__icon', 'aria-hidden': 'true' }, fileBadge],
+      [
+        'div',
+        { class: 'attachment-card__content' },
+        ['div', { class: 'attachment-card__name' }, node.attrs.originalName],
+        ['div', { class: 'attachment-card__meta' }, `${node.attrs.mimeType} · ${formatFileSize(node.attrs.sizeBytes)}`],
+      ],
     ];
   },
 
@@ -64,4 +70,13 @@ function formatFileSize(value: string) {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileBadge(originalName: string, mimeType: string) {
+  const extension = originalName.split('.').pop()?.trim();
+  if (extension && extension !== originalName && extension.length <= 5) {
+    return extension.toUpperCase();
+  }
+  const mimeSubtype = mimeType.split('/').pop()?.split(/[.+-]/)[0];
+  return (mimeSubtype || 'FILE').slice(0, 5).toUpperCase();
 }

@@ -285,17 +285,28 @@ function renderAttachment(node: DocumentContent, documentId: string, assetScope:
   const mimeType = typeof node.attrs?.mimeType === 'string' ? node.attrs.mimeType : 'application/octet-stream';
   const sizeBytes = typeof node.attrs?.sizeBytes === 'string' ? node.attrs.sizeBytes : '0';
   const href = assetId ? buildAssetUrl(documentId, assetId, assetScope) : '#';
+  const fileBadge = getFileBadge(originalName, mimeType);
   return (
-    <div key={key} className="my-4 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <div className="min-w-0">
-        <div className="truncate font-medium text-gray-800">{originalName}</div>
-        <div className="mt-1 text-xs text-gray-500">{mimeType} · {formatFileSize(sizeBytes)}</div>
+    <div key={key} className="attachment-card">
+      <div className="attachment-card__icon" aria-hidden="true">{fileBadge}</div>
+      <div className="attachment-card__content">
+        <div className="attachment-card__name">{originalName}</div>
+        <div className="attachment-card__meta">{mimeType} · {formatFileSize(sizeBytes)}</div>
       </div>
-      <a className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm" href={href} download>
-        下载
+      <a className="attachment-card__download" href={href} download aria-label={`下载 ${originalName}`} title="下载附件">
+        ↓
       </a>
     </div>
   );
+}
+
+function getFileBadge(originalName: string, mimeType: string) {
+  const extension = originalName.split('.').pop()?.trim();
+  if (extension && extension !== originalName && extension.length <= 5) {
+    return extension.toUpperCase();
+  }
+  const mimeSubtype = mimeType.split('/').pop()?.split(/[.+-]/)[0];
+  return (mimeSubtype || 'FILE').slice(0, 5).toUpperCase();
 }
 
 function renderMermaid(node: DocumentContent, key: number) {

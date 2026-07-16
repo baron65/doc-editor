@@ -19,6 +19,7 @@ import { BlockContextToolbar } from './BlockContextToolbar';
 import { TableContextToolbar } from './TableContextToolbar';
 import { useAppDialog } from '@/components/app-dialog/AppDialog';
 import { normalizeMermaidCodeBlocks } from '../content/mermaidContent';
+import { buildAssetUrl } from '../reader/assetPresentation';
 
 interface DocumentEditorShellProps {
   document?: AdminDocumentDetail;
@@ -612,6 +613,7 @@ export const DocumentEditorShell = forwardRef<DocumentEditorShellHandle, Documen
             attachmentInputRef.current?.click();
           }}
           onInsertMermaid={insertMermaid}
+          getAttachmentDownloadUrl={(assetId) => buildAssetUrl(document.documentId, assetId, 'admin')}
         />
         <TableContextToolbar
           editor={editor}

@@ -7,6 +7,7 @@ import {
 } from 'react';
 import type { Editor } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Selection } from '@tiptap/pm/state';
 import { EditorContent } from '@tiptap/react';
 import {
   getBlockHandlePresentation,
@@ -43,6 +44,7 @@ interface BlockContextToolbarProps {
   onEditImageCaption: (position: number) => void;
   onInsertAttachment: (position: number) => void;
   onInsertMermaid: (position: number) => void;
+  getAttachmentDownloadUrl?: (assetId: string) => string;
 }
 
 interface BlockTarget {
@@ -57,6 +59,8 @@ interface BlockTarget {
   attrs: Record<string, unknown>;
   node: ProseMirrorNode;
   handleViewportLeft: number;
+  left: number;
+  width: number;
 }
 
 type CascadeMenuView = 'alignment' | 'color' | 'fontSize';
@@ -84,6 +88,7 @@ export function BlockContextToolbar({
   onEditImageCaption,
   onInsertAttachment,
   onInsertMermaid,
+  getAttachmentDownloadUrl,
 }: BlockContextToolbarProps) {
   const [target, setTarget] = useState<BlockTarget>();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -315,7 +320,9 @@ export function BlockContextToolbar({
     if ((event.target as HTMLElement).closest('[data-block-handle="true"]')) {
       cancelScheduledClose();
       highlightTarget();
-      setMenuOpen(true);
+      if (target?.type !== 'attachment') {
+        setMenuOpen(true);
+      }
       return;
     }
     if (menuOpen) {
@@ -353,6 +360,8 @@ export function BlockContextToolbar({
       attrs: node.attrs,
       node,
       handleViewportLeft: wrapperRect.left + 8,
+      left: blockRect.left - wrapperRect.left,
+      width: blockRect.width,
     };
     setTarget((current) => (
       current?.pos === nextTarget.pos && current.top === nextTarget.top
@@ -438,7 +447,16 @@ export function BlockContextToolbar({
 
   const deleteTargetNode = () => {
     if (!target) return;
-    run(() => editor.chain().focus().deleteRange({ from: target.pos, to: target.end }).run());
+    cancelScheduledClose();
+    const transaction = editor.state.tr.delete(target.pos, target.end);
+    const cursorPosition = Math.min(target.pos, transaction.doc.content.size);
+    transaction.setSelection(Selection.near(transaction.doc.resolve(cursorPosition), 1));
+    transaction.setMeta(blockHighlightPluginKey, null);
+    editor.view.dispatch(transaction.scrollIntoView());
+    editor.view.focus();
+    setTarget(undefined);
+    setMenuOpen(false);
+    setCascadeMenu(undefined);
   };
 
   return (
@@ -453,7 +471,47 @@ export function BlockContextToolbar({
       }}
     >
       <EditorContent editor={editor} />
-      {target && presentation ? (
+      {target?.type === 'attachment' ? (
+        <div
+          data-attachment-toolbar="true"
+          data-block-handle="true"
+          className="absolute z-40 flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+          style={{
+            top: Math.max(0, target.top - 34),
+            left: Math.max(0, target.left + target.width - 78),
+          }}
+          role="toolbar"
+          aria-label="附件操作"
+          onPointerEnter={() => {
+            cancelScheduledClose();
+            highlightTarget();
+          }}
+          onMouseLeave={scheduleMenuClose}
+        >
+          <a
+            aria-label="下载附件"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 no-underline hover:bg-gray-100 hover:text-brand-600"
+            download
+            href={getAttachmentDownloadUrl?.(String(target.attrs.assetId ?? '')) || '#'}
+            title="下载附件"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <AttachmentToolbarIcon type="download" />
+          </a>
+          <button
+            aria-label="删除附件"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-red-50 hover:text-red-600"
+            title="删除附件"
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={deleteTargetNode}
+          >
+            <AttachmentToolbarIcon type="delete" />
+          </button>
+        </div>
+      ) : null}
+      {target && presentation && target.type !== 'attachment' ? (
         <div
           data-block-handle="true"
           className="absolute left-2 z-30"
@@ -619,6 +677,27 @@ export function BlockContextToolbar({
         />
       ) : null}
     </div>
+  );
+}
+
+function AttachmentToolbarIcon({ type }: { type: 'download' | 'delete' }) {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {type === 'download' ? (
+        <>
+          <path d="M12 3v12" />
+          <path d="m7 10 5 5 5-5" />
+          <path d="M5 20h14" />
+        </>
+      ) : (
+        <>
+          <path d="M4 7h16" />
+          <path d="M9 7V4h6v3" />
+          <path d="m7 7 1 13h8l1-13" />
+          <path d="M10 11v5M14 11v5" />
+        </>
+      )}
+    </svg>
   );
 }
 
