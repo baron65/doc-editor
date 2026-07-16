@@ -27,13 +27,11 @@ export const SAFE_FONT_SIZES = [
 
 export type BlockTextAlign = 'left' | 'center' | 'right' | 'justify';
 
-const SAFE_TEXT_COLOR_VALUES = new Set<string>(
-  SAFE_TEXT_COLORS.flatMap(({ value }) => value ? [value] : []),
-);
-const SAFE_TEXT_BACKGROUND_COLOR_VALUES = new Set<string>(
-  SAFE_TEXT_BACKGROUND_COLORS.flatMap(({ value }) => value ? [value] : []),
-);
-const SAFE_FONT_SIZE_VALUES = new Set<string>(SAFE_FONT_SIZES.map(({ value }) => value));
+const DANGEROUS_STYLE_VALUE = /(?:url\s*\(|expression\s*\(|javascript\s*:|@import|[;<>])/i;
+const HEX_COLOR = /^#[\da-f]{3,8}$/i;
+const FUNCTION_COLOR = /^(?:rgba?|hsla?)\(\s*[-\d.%\s,/]+\)$/i;
+const NAMED_COLOR = /^[a-z]{1,32}$/i;
+const FONT_SIZE = /^(\d+(?:\.\d{1,2})?)(px|em|rem|pt|%)$/i;
 
 export function normalizeBlockTextAlign(value: unknown): BlockTextAlign {
   return ['left', 'center', 'right', 'justify'].includes(String(value))
@@ -50,15 +48,35 @@ export function normalizeBlockIndent(value: unknown) {
 }
 
 export function normalizeTextColor(value: unknown): string | null {
-  return typeof value === 'string' && SAFE_TEXT_COLOR_VALUES.has(value) ? value : null;
+  return normalizeCssColor(value);
 }
 
 export function normalizeTextBackgroundColor(value: unknown): string | null {
-  return typeof value === 'string' && SAFE_TEXT_BACKGROUND_COLOR_VALUES.has(value) ? value : null;
+  return normalizeCssColor(value);
 }
 
 export function normalizeFontSize(value: unknown): string | null {
-  return typeof value === 'string' && SAFE_FONT_SIZE_VALUES.has(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  if (DANGEROUS_STYLE_VALUE.test(normalized)) return null;
+  const match = FONT_SIZE.exec(normalized);
+  if (!match) return null;
+  const size = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  if (!Number.isFinite(size)) return null;
+  if (unit === 'px') return size >= 8 && size <= 72 ? normalized : null;
+  if (unit === 'pt') return size >= 6 && size <= 54 ? normalized : null;
+  if (unit === '%') return size >= 50 && size <= 400 ? normalized : null;
+  return size >= 0.5 && size <= 4 ? normalized : null;
+}
+
+function normalizeCssColor(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  if (!normalized || normalized.length > 80 || DANGEROUS_STYLE_VALUE.test(normalized)) return null;
+  return HEX_COLOR.test(normalized) || FUNCTION_COLOR.test(normalized) || NAMED_COLOR.test(normalized)
+    ? normalized
+    : null;
 }
 
 export function buildBlockTextAlignHtmlAttributes(value: unknown) {

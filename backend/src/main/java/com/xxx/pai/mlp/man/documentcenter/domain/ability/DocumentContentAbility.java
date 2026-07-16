@@ -10,6 +10,8 @@ import java.util.Locale;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -28,12 +30,14 @@ public class DocumentContentAbility {
     private static final Set<String> ALLOWED_MARK_TYPES = Set.of(
             "bold", "italic", "underline", "strike", "code", "link", "textStyle");
     private static final Set<String> ALLOWED_TEXT_ALIGNMENTS = Set.of("left", "center", "right", "justify");
-    private static final Set<String> ALLOWED_TEXT_COLORS = Set.of(
-            "#4b5563", "#dc2626", "#ea580c", "#16a34a", "#2563eb", "#9333ea");
-    private static final Set<String> ALLOWED_TEXT_BACKGROUND_COLORS = Set.of(
-            "#fff2cc", "#dbeafe", "#dcfce7", "#fee2e2", "#f3e8ff");
-    private static final Set<String> ALLOWED_FONT_SIZES = Set.of(
-            "12px", "14px", "16px", "18px", "20px");
+    private static final Pattern DANGEROUS_STYLE_VALUE = Pattern.compile(
+            "url\\s*\\(|expression\\s*\\(|javascript\\s*:|@import|[;<>]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern HEX_COLOR = Pattern.compile("^#[0-9a-f]{3,8}$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern FUNCTION_COLOR = Pattern.compile(
+            "^(?:rgba?|hsla?)\\(\\s*[-\\d.%\\s,/]+\\)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NAMED_COLOR = Pattern.compile("^[a-z]{1,32}$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern FONT_SIZE = Pattern.compile(
+            "^(\\d+(?:\\.\\d{1,2})?)(px|em|rem|pt|%)$", Pattern.CASE_INSENSITIVE);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -147,21 +151,21 @@ public class DocumentContentAbility {
             boolean hasStyle = false;
             Object color = styleAttrs.get("color");
             if (color != null) {
-                if (!(color instanceof String) || !ALLOWED_TEXT_COLORS.contains(color)) {
+                if (!isSafeTextColor(color)) {
                     throw new ValidationFailure("unsupported text color");
                 }
                 hasStyle = true;
             }
             Object fontSize = styleAttrs.get("fontSize");
             if (fontSize != null) {
-                if (!(fontSize instanceof String) || !ALLOWED_FONT_SIZES.contains(fontSize)) {
+                if (!isSafeFontSize(fontSize)) {
                     throw new ValidationFailure("unsupported font size");
                 }
                 hasStyle = true;
             }
             Object backgroundColor = styleAttrs.get("backgroundColor");
             if (backgroundColor != null) {
-                if (!(backgroundColor instanceof String) || !ALLOWED_TEXT_BACKGROUND_COLORS.contains(backgroundColor)) {
+                if (!isSafeTextColor(backgroundColor)) {
                     throw new ValidationFailure("unsupported text background color");
                 }
                 hasStyle = true;
@@ -170,6 +174,45 @@ public class DocumentContentAbility {
                 throw new ValidationFailure("text style is empty");
             }
         }
+    }
+
+    private boolean isSafeTextColor(Object value) {
+        if (!(value instanceof String)) {
+            return false;
+        }
+        String color = ((String) value).trim();
+        if (color.isEmpty() || color.length() > 80 || DANGEROUS_STYLE_VALUE.matcher(color).find()) {
+            return false;
+        }
+        return HEX_COLOR.matcher(color).matches()
+                || FUNCTION_COLOR.matcher(color).matches()
+                || NAMED_COLOR.matcher(color).matches();
+    }
+
+    private boolean isSafeFontSize(Object value) {
+        if (!(value instanceof String)) {
+            return false;
+        }
+        String fontSize = ((String) value).trim();
+        if (fontSize.isEmpty() || fontSize.length() > 20 || DANGEROUS_STYLE_VALUE.matcher(fontSize).find()) {
+            return false;
+        }
+        Matcher matcher = FONT_SIZE.matcher(fontSize);
+        if (!matcher.matches()) {
+            return false;
+        }
+        double size = Double.parseDouble(matcher.group(1));
+        String unit = matcher.group(2).toLowerCase(Locale.ROOT);
+        if ("px".equals(unit)) {
+            return size >= 8 && size <= 72;
+        }
+        if ("pt".equals(unit)) {
+            return size >= 6 && size <= 54;
+        }
+        if ("%".equals(unit)) {
+            return size >= 50 && size <= 400;
+        }
+        return size >= 0.5 && size <= 4;
     }
 
     @SuppressWarnings("unchecked")

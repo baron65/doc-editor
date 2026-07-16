@@ -67,6 +67,30 @@ class DocumentContentAbilityTest {
     }
 
     @Test
+    void acceptsCommonSafeTextStylesFromPastedContent() {
+        DocumentContentAbility ability = new DocumentContentAbility();
+        String content = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{"
+                + "\"type\":\"text\",\"text\":\"粘贴文本\",\"marks\":[{\"type\":\"textStyle\","
+                + "\"attrs\":{\"color\":\"rgb(30, 64, 175)\",\"backgroundColor\":\"rgba(30, 64, 175, 0.2)\",\"fontSize\":\"1.25rem\"}}]}]}]}";
+
+        assertThat(ability.validateDraftContent(1, content).isValid()).isTrue();
+    }
+
+    @Test
+    void rejectsTextStyleInjectionAndExtremeFontSizes() {
+        DocumentContentAbility ability = new DocumentContentAbility();
+        String injectedColor = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{"
+                + "\"type\":\"text\",\"text\":\"危险\",\"marks\":[{\"type\":\"textStyle\","
+                + "\"attrs\":{\"color\":\"red; background: black\"}}]}]}]}";
+        String extremeFontSize = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{"
+                + "\"type\":\"text\",\"text\":\"危险\",\"marks\":[{\"type\":\"textStyle\","
+                + "\"attrs\":{\"fontSize\":\"300px\"}}]}]}]}";
+
+        assertThat(ability.validateDraftContent(1, injectedColor).isValid()).isFalse();
+        assertThat(ability.validateDraftContent(1, extremeFontSize).isValid()).isFalse();
+    }
+
+    @Test
     void rejectsUnsupportedFontSize() {
         DocumentContentAbility ability = new DocumentContentAbility();
         String content = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{"

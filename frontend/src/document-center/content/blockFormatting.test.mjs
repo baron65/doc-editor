@@ -21,24 +21,32 @@ test('缩进限制在 0 到 6 级且对齐只接受安全枚举', () => {
   assert.equal(normalizeBlockTextAlign('expression(alert(1))'), 'left');
 });
 
-test('文本颜色只接受固定安全色板', () => {
+test('文本颜色接受常见 CSS 色值并拒绝注入语法', () => {
   assert.equal(SAFE_TEXT_COLORS.length, 7);
   assert.equal(normalizeTextColor('#2563eb'), '#2563eb');
-  assert.equal(normalizeTextColor('red'), null);
+  assert.equal(normalizeTextColor('red'), 'red');
+  assert.equal(normalizeTextColor('rgb(30, 64, 175)'), 'rgb(30, 64, 175)');
+  assert.equal(normalizeTextColor('hsl(220, 70%, 50%)'), 'hsl(220, 70%, 50%)');
   assert.equal(normalizeTextColor('url(javascript:alert(1))'), null);
+  assert.equal(normalizeTextColor('red; background: black'), null);
 });
 
-test('文本背景色只接受固定安全色板', () => {
+test('文本背景色接受常见 CSS 色值并拒绝注入语法', () => {
   assert.equal(SAFE_TEXT_BACKGROUND_COLORS.length, 6);
   assert.equal(normalizeTextBackgroundColor('#fff2cc'), '#fff2cc');
-  assert.equal(normalizeTextBackgroundColor('yellow'), null);
+  assert.equal(normalizeTextBackgroundColor('yellow'), 'yellow');
+  assert.equal(normalizeTextBackgroundColor('rgba(30, 64, 175, 0.2)'), 'rgba(30, 64, 175, 0.2)');
   assert.equal(normalizeTextBackgroundColor('url(javascript:alert(1))'), null);
 });
 
-test('字号只接受固定安全字号', () => {
+test('字号接受合理范围并拒绝极端或注入值', () => {
   assert.equal(SAFE_FONT_SIZES.length, 5);
   assert.equal(normalizeFontSize('16px'), '16px');
-  assert.equal(normalizeFontSize('13px'), null);
+  assert.equal(normalizeFontSize('13px'), '13px');
+  assert.equal(normalizeFontSize('1.25rem'), '1.25rem');
+  assert.equal(normalizeFontSize('120%'), '120%');
+  assert.equal(normalizeFontSize('73px'), null);
+  assert.equal(normalizeFontSize('4.1em'), null);
   assert.equal(normalizeFontSize('expression(alert(1))'), null);
 });
 
