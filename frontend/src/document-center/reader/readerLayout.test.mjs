@@ -77,6 +77,15 @@ test('编辑器和阅读器共享同一套正文视觉层', () => {
   assert.match(globalStyles, /\.document-body code:not\(pre code\)/);
 });
 
+test('表格尊重自身宽度、超出时横向滚动且不使用圆角', () => {
+  assert.match(globalStyles, /\.document-table-wrapper,[\s\S]*?overflow-x:\s*auto/);
+  assert.match(globalStyles, /\.document-table-wrapper,[\s\S]*?border:\s*0/);
+  assert.match(globalStyles, /\.document-table-wrapper,[\s\S]*?border-radius:\s*0/);
+  assert.match(globalStyles, /\.document-body table\s*\{[^}]*width:\s*auto/);
+  assert.match(globalStyles, /\.document-body table\s*\{[^}]*max-width:\s*none/);
+  assert.doesNotMatch(globalStyles, /\.document-body img,\s*\.document-body table,/);
+});
+
 test('提示块和图片在编辑态复用阅读态视觉语义', () => {
   assert.match(calloutSource, /class: 'callout-node'/);
   assert.doesNotMatch(calloutSource, /border-blue-200 bg-blue-50/);

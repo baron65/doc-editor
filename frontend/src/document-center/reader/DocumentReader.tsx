@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { MermaidRenderer } from '../mermaid/MermaidRenderer';
 import type { DocumentContent } from '../../types/documentCenter';
 import { buildAssetUrl, formatFileSize, type AssetScope } from './assetPresentation';
@@ -182,20 +182,27 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
         return renderMermaid({ type: 'mermaid', attrs: { source: extractDocumentText(node) } }, key);
       }
       return <CodeBlock key={key} code={extractText(node)} language={stringAttribute(node.attrs?.language)} />;
-    case 'table':
+    case 'table': {
+      const tableLayout = buildReaderTableLayout(node);
       return (
         <div key={key} className="document-table-wrapper">
-          <table>
+          <table style={tableLayout.tableStyle}>
+            <colgroup>
+              {tableLayout.columns.map((style, columnIndex) => (
+                <col key={columnIndex} style={style} />
+              ))}
+            </colgroup>
             <tbody>{renderChildren(node.content, documentId, assetScope)}</tbody>
           </table>
         </div>
       );
+    }
     case 'tableRow':
       return <tr key={key}>{renderChildren(node.content, documentId, assetScope)}</tr>;
     case 'tableHeader':
-      return <th key={key}>{renderChildren(node.content, documentId, assetScope)}</th>;
+      return <th key={key} {...buildReaderCellSpanProps(node)}>{renderChildren(node.content, documentId, assetScope)}</th>;
     case 'tableCell':
-      return <td key={key}>{renderChildren(node.content, documentId, assetScope)}</td>;
+      return <td key={key} {...buildReaderCellSpanProps(node)}>{renderChildren(node.content, documentId, assetScope)}</td>;
     case 'callout': {
       const kind = typeof node.attrs?.kind === 'string' ? node.attrs.kind : 'info';
       return (
@@ -213,6 +220,69 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
     default:
       return <div key={key}>{children}</div>;
   }
+}
+
+const TABLE_CELL_MIN_WIDTH = 80;
+
+function buildReaderTableLayout(node: DocumentContent): {
+  columns: CSSProperties[];
+  tableStyle: CSSProperties;
+} {
+  const firstRow = node.content?.[0];
+  if (firstRow?.type !== 'tableRow' || !firstRow.content?.length) {
+    return { columns: [], tableStyle: {} };
+  }
+
+  const columns: CSSProperties[] = [];
+  let fixedWidth = true;
+  let totalWidth = 0;
+
+  for (const cell of firstRow.content) {
+    const colspan = normalizeTableSpan(cell.attrs?.colspan);
+    const cellColwidth = cell.attrs?.colwidth;
+    const colwidth = Array.isArray(cellColwidth) ? cellColwidth : [];
+    for (let columnOffset = 0; columnOffset < colspan; columnOffset += 1) {
+      const width = normalizeTableColumnWidth(colwidth[columnOffset]);
+      if (width === undefined) {
+        fixedWidth = false;
+        totalWidth += TABLE_CELL_MIN_WIDTH;
+        columns.push({ minWidth: `${TABLE_CELL_MIN_WIDTH}px` });
+      } else {
+        const safeWidth = Math.max(width, TABLE_CELL_MIN_WIDTH);
+        totalWidth += safeWidth;
+        columns.push({ width: `${safeWidth}px` });
+      }
+    }
+  }
+
+  return {
+    columns,
+    tableStyle: fixedWidth
+      ? { width: `${totalWidth}px` }
+      : { minWidth: `${totalWidth}px` },
+  };
+}
+
+function buildReaderCellSpanProps(node: DocumentContent): {
+  colSpan?: number;
+  rowSpan?: number;
+} {
+  const colSpan = normalizeTableSpan(node.attrs?.colspan);
+  const rowSpan = normalizeTableSpan(node.attrs?.rowspan);
+  return {
+    colSpan: colSpan > 1 ? colSpan : undefined,
+    rowSpan: rowSpan > 1 ? rowSpan : undefined,
+  };
+}
+
+function normalizeTableSpan(value: unknown): number {
+  const span = Number(value ?? 1);
+  return Number.isInteger(span) && span > 0 ? span : 1;
+}
+
+function normalizeTableColumnWidth(value: unknown): number | undefined {
+  const width = Number(value);
+  return Number.isFinite(width) && width > 0 ? Math.round(width) : undefined;
 }
 
 function renderInlineChildren(nodes: DocumentContent[] | undefined, documentId: string, assetScope: AssetScope): ReactNode {

@@ -81,6 +81,10 @@ test('编辑器使用块级工具箱替代顶部内容工具栏', () => {
   assert.match(blockToolbarSource, /aria-label="块工具箱"/);
 });
 
+test('表格只使用表格专用句柄，不重复显示通用块句柄', () => {
+  assert.match(blockToolbarSource, /target\.type !== 'attachment' && target\.type !== 'table'/);
+});
+
 test('块手柄按鼠标坐标命中当前块并使用单列工具箱', () => {
   assert.match(blockToolbarSource, /posAtCoords\(/);
   assert.match(blockToolbarSource, /target\.insertionPos/);
@@ -123,6 +127,8 @@ test('选中文本工具栏使用图标并提供文本和背景色工具', () =>
   assert.match(blockToolbarSource, /type="background-color"/);
   assert.match(blockToolbarSource, /SAFE_TEXT_BACKGROUND_COLORS/);
   assert.match(blockToolbarSource, /selectionFormatMenu/);
+  assert.match(blockToolbarSource, /selection instanceof CellSelection/);
+  assert.match(blockToolbarSource, /selection\.node\.type\.name === 'table'/);
 });
 
 test('鼠标进入手柄时临时高亮目标节点', () => {

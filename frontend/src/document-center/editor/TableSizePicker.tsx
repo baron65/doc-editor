@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   INITIAL_TABLE_GRID_SIZE,
   MAX_TABLE_DIMENSION,
@@ -13,6 +13,8 @@ interface TableSizePickerProps {
 }
 
 export function TableSizePicker({ onCancel, onInsert, position }: TableSizePickerProps) {
+  const draggingRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
   const [rows, setRows] = useState(3);
   const [columns, setColumns] = useState(3);
   const [visibleRows, setVisibleRows] = useState(INITIAL_TABLE_GRID_SIZE);
@@ -42,6 +44,38 @@ export function TableSizePicker({ onCancel, onInsert, position }: TableSizePicke
     setVisibleRows((current) => expandTableGrid(current, row));
     setVisibleColumns((current) => expandTableGrid(current, column));
   };
+  const beginDrag = (event: React.PointerEvent<HTMLButtonElement>, row: number, column: number) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    draggingRef.current = true;
+    setDragging(true);
+    hoverCell(row, column);
+  };
+  const dragAcross = (row: number, column: number) => {
+    if (draggingRef.current) hoverCell(row, column);
+  };
+  const dimensionsAtPointer = (event: React.PointerEvent<HTMLElement>) => {
+    const element = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-table-row][data-table-column]');
+    const row = Number(element?.dataset.tableRow);
+    const column = Number(element?.dataset.tableColumn);
+    return Number.isFinite(row) && Number.isFinite(column) ? { row, column } : undefined;
+  };
+  const dragAcrossPointer = (event: React.PointerEvent<HTMLElement>) => {
+    const dimensions = dimensionsAtPointer(event);
+    if (dimensions) dragAcross(dimensions.row, dimensions.column);
+  };
+  const finishDrag = (event: React.PointerEvent<HTMLElement>) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    setDragging(false);
+    const dimensions = dimensionsAtPointer(event) ?? { row: rows, column: columns };
+    hoverCell(dimensions.row, dimensions.column);
+    onInsert(dimensions.row, dimensions.column);
+  };
+  const cancelDrag = () => {
+    draggingRef.current = false;
+    setDragging(false);
+  };
 
   return (
     <div
@@ -55,8 +89,11 @@ export function TableSizePicker({ onCancel, onInsert, position }: TableSizePicke
         <button className="text-xs text-gray-400 hover:text-gray-700" type="button" onClick={onCancel}>关闭</button>
       </div>
       <div
-        className="table-size-picker-grid"
+        className={`table-size-picker-grid ${dragging ? 'is-dragging' : ''}`}
         style={{ gridTemplateColumns: `repeat(${visibleColumns}, minmax(0, 1fr))` }}
+        onPointerMove={dragAcrossPointer}
+        onPointerUp={finishDrag}
+        onPointerCancel={cancelDrag}
       >
         {Array.from({ length: visibleRows * visibleColumns }, (_, index) => {
           const row = Math.floor(index / visibleColumns) + 1;
@@ -67,10 +104,11 @@ export function TableSizePicker({ onCancel, onInsert, position }: TableSizePicke
               key={`${row}-${column}`}
               aria-label={`${row} 行 ${column} 列`}
               className={`table-size-picker-cell ${selected ? 'is-selected' : ''}`}
+              data-table-column={column}
+              data-table-row={row}
               type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onPointerEnter={() => hoverCell(row, column)}
-              onClick={() => onInsert(row, column)}
+              onPointerDown={(event) => beginDrag(event, row, column)}
+              onPointerEnter={() => dragAcross(row, column)}
             />
           );
         })}

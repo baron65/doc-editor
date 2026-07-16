@@ -3,7 +3,7 @@ import test from 'node:test';
 import { Schema } from '@tiptap/pm/model';
 import { EditorState, NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { CellSelection, tableNodes } from '@tiptap/pm/tables';
-import { deleteSelectedTable } from './TableKeyboardExtension.ts';
+import { deleteSelectedTable, selectCurrentTableCell } from './TableKeyboardExtension.ts';
 
 function createState() {
   const schema = new Schema({
@@ -43,4 +43,19 @@ test('只有整表 NodeSelection 会被键盘删除处理', () => {
   const cellPos = cellState.doc.child(0).nodeSize + 2;
   cellState = cellState.apply(cellState.tr.setSelection(CellSelection.create(cellState.doc, cellPos)));
   assert.equal(deleteSelectedTable(cellState), false);
+});
+
+test('Mod-a 在表格内将当前单元格转换为 CellSelection', () => {
+  let state = createState();
+  const tablePos = state.doc.child(0).nodeSize;
+  state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, tablePos + 4)));
+
+  assert.equal(selectCurrentTableCell(state, (transaction) => { state = state.apply(transaction); }), true);
+  assert.ok(state.selection instanceof CellSelection);
+  assert.equal(state.selection.$anchorCell.pos, tablePos + 2);
+});
+
+test('Mod-a 在表格外不拦截原有全选行为', () => {
+  const state = createState();
+  assert.equal(selectCurrentTableCell(state), false);
 });

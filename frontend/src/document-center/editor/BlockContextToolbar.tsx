@@ -7,7 +7,8 @@ import {
 } from 'react';
 import type { Editor } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { Selection } from '@tiptap/pm/state';
+import { NodeSelection, Selection } from '@tiptap/pm/state';
+import { CellSelection } from '@tiptap/pm/tables';
 import { EditorContent } from '@tiptap/react';
 import {
   getBlockHandlePresentation,
@@ -112,8 +113,11 @@ export function BlockContextToolbar({
       return undefined;
     }
     const updateSelectionMenu = () => {
-      const { from, to, empty } = editor.state.selection;
-      if (empty || disabled) {
+      const selection = editor.state.selection;
+      const { from, to, empty } = selection;
+      const tableSelection = selection instanceof CellSelection
+        || (selection instanceof NodeSelection && selection.node.type.name === 'table');
+      if (empty || disabled || tableSelection) {
         setSelectionMenu(undefined);
         setSelectionFormatMenu(undefined);
         return;
@@ -544,7 +548,7 @@ export function BlockContextToolbar({
           </button>
         </div>
       ) : null}
-      {target && presentation && target.type !== 'attachment' ? (
+      {target && presentation && target.type !== 'attachment' && target.type !== 'table' ? (
         <div
           data-block-handle="true"
           className="absolute left-2 z-30"

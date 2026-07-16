@@ -41,6 +41,46 @@ test('Reader 将结构化表格渲染为可读 HTML 表格', () => {
   assert.match(html, /<td[^>]*>.*A.*<\/td>/);
 });
 
+test('Reader 按编辑器 colwidth 渲染列宽、表格宽度及合并单元格', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: 'table-widths',
+        title: '列宽文档',
+        content: {
+          type: 'doc',
+          content: [{
+            type: 'table',
+            content: [
+              {
+                type: 'tableRow',
+                content: [
+                  { type: 'tableHeader', attrs: { colspan: 2, colwidth: [152, 80] }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '前两列' }] }] },
+                  { type: 'tableHeader', attrs: { colwidth: [591] }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '第三列' }] }] },
+                ],
+              },
+              {
+                type: 'tableRow',
+                content: [
+                  { type: 'tableCell', attrs: { colspan: 2, rowspan: 2 }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '合并区域' }] }] },
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '内容' }] }] },
+                ],
+              },
+            ],
+          }],
+        },
+      }}
+    />,
+  );
+
+  assert.match(html, /<table style="width:823px"/);
+  assert.match(html, /<col style="width:152px"/);
+  assert.match(html, /<col style="width:80px"/);
+  assert.match(html, /<col style="width:591px"/);
+  assert.match(html, /<th colspan="2"/);
+  assert.match(html, /<td colspan="2" rowspan="2"/);
+});
+
 test('Reader 渲染带语义样式的提示块', () => {
   const html = renderToStaticMarkup(
     <DocumentReader

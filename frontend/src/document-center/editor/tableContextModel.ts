@@ -8,6 +8,7 @@ export interface TableContextState {
   columnCount: number;
   rowIndex: number;
   columnIndex: number;
+  selectionKind: 'cell' | 'cells' | 'row' | 'column' | 'table';
   canMerge: boolean;
   canSplit: boolean;
 }
@@ -31,6 +32,7 @@ export function resolveTableContext(editor: Editor): TableContextState | undefin
       columnCount: map.width,
       rowIndex: 0,
       columnIndex: 0,
+      selectionKind: 'table',
       canMerge: false,
       canSplit: false,
     };
@@ -51,12 +53,20 @@ export function resolveTableContext(editor: Editor): TableContextState | undefin
       ? map.positionAt(0, 0, node)
       : $from.before(cellDepth) - tablePos - 1;
     const cellRect = map.findCell(relativeCellPos);
+    const selectionKind = selection instanceof CellSelection
+      ? selection.isRowSelection()
+        ? 'row'
+        : selection.isColSelection()
+          ? 'column'
+          : 'cells'
+      : 'cell';
     return {
       tablePos,
       rowCount: map.height,
       columnCount: map.width,
       rowIndex: cellRect.top,
       columnIndex: cellRect.left,
+      selectionKind,
       canMerge: editor.can().chain().focus().mergeCells().run(),
       canSplit: editor.can().chain().focus().splitCell().run(),
     };

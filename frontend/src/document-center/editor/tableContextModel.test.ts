@@ -47,6 +47,7 @@ function createEditor() {
     get state() { return state; },
     can: () => ({ chain: () => commandChain }),
     view: {
+      focus() {},
       dispatch(transaction) {
         state = state.apply(transaction);
       },
@@ -71,6 +72,7 @@ test('解析当前表格的边界和行列数', () => {
     columnCount: 2,
     rowIndex: 0,
     columnIndex: 0,
+    selectionKind: 'cell',
     canMerge: false,
     canSplit: false,
   });
@@ -100,6 +102,29 @@ test('可按索引选中完整行或完整列', () => {
 
   assert.equal(selectTableColumn(editor, context, 1), true);
   assert.ok(editor.state.selection instanceof CellSelection);
+});
+
+test('区分光标、整行、整列与多单元格选区，避免同时高亮当前行列', () => {
+  const editor = createEditor();
+  editor.commands.setTextSelection(8);
+  let context = resolveTableContext(editor);
+  assert.equal(context?.selectionKind, 'cell');
+
+  assert.ok(context);
+  selectTableRow(editor, context, 1);
+  context = resolveTableContext(editor);
+  assert.equal(context?.selectionKind, 'row');
+
+  assert.ok(context);
+  selectTableColumn(editor, context, 1);
+  context = resolveTableContext(editor);
+  assert.equal(context?.selectionKind, 'column');
+});
+
+test('整表 NodeSelection 使用 table 选择类型', () => {
+  const editor = createEditor();
+  editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, 4)));
+  assert.equal(resolveTableContext(editor)?.selectionKind, 'table');
 });
 
 test('整行和整列选区可被删除命令精确处理', () => {
