@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { Editor } from '@tiptap/core';
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { DOMSerializer, type Node as ProseMirrorNode, type Schema } from '@tiptap/pm/model';
 import { NodeSelection, Selection } from '@tiptap/pm/state';
 import { CellSelection } from '@tiptap/pm/tables';
 import { EditorContent } from '@tiptap/react';
@@ -479,7 +479,7 @@ export function BlockContextToolbar({
   const copyTargetNode = () => {
     if (!target) return;
     run(() => {
-      void navigator.clipboard.writeText(JSON.stringify(target.node.toJSON()));
+      void copyNodeAsRichContent(target.node, editor.schema);
     });
   };
 
@@ -580,11 +580,19 @@ export function BlockContextToolbar({
           </button>
           {menuOpen ? (
             <div
-              className={`absolute ${menuSide === 'left' ? 'right-9' : 'left-9'} w-60 max-h-[min(40rem,calc(100vh-2rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl`}
+              className={`absolute ${menuSide === 'left' ? 'right-9' : 'left-9'} w-56 max-h-[min(40rem,calc(100vh-2rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl`}
               style={{ top: menuOffsetTop }}
               role="menu"
               aria-label="块工具箱"
               onMouseEnter={cancelScheduledClose}
+              onMouseOver={(event) => {
+                const menuItem = event.target instanceof Element
+                  ? event.target.closest<HTMLButtonElement>('button[role="menuitem"]')
+                  : null;
+                if (menuItem && menuItem.dataset.hasSubmenu !== 'true') {
+                  setCascadeMenu(undefined);
+                }
+              }}
             >
               <MenuGroup compact label="转换为">
                 <MenuButton
@@ -608,9 +616,10 @@ export function BlockContextToolbar({
                 ))}
                 <MenuButton compact active={target.type === 'orderedList'} icon={<BlockToolIcon type="ordered-list" />} label="编号" shortcut={shortcutLabel('orderedList')} onRun={() => run(() => focusTarget().toggleOrderedList().run())} />
                 <MenuButton compact active={target.type === 'bulletList'} icon={<BlockToolIcon type="bullet-list" />} label="列表" shortcut={shortcutLabel('bulletList')} onRun={() => run(() => focusTarget().toggleBulletList().run())} />
-                <MenuButton compact active={target.type === 'taskList'} icon={<BlockToolIcon type="task-list" />} label="任务" shortcut={shortcutLabel('taskList')} onRun={() => run(() => focusTarget().toggleTaskList().run())} />
                 <MenuButton compact active={target.type === 'codeBlock'} icon={<BlockToolIcon type="code" />} label="代码块" shortcut={shortcutLabel('codeBlock')} onRun={() => run(() => onInsertCodeBlock(target.selectionPos))} />
                 <MenuButton compact active={target.type === 'blockquote'} icon={<BlockToolIcon type="quote" />} label="引用" shortcut={shortcutLabel('blockquote')} onRun={() => run(() => focusTarget().toggleBlockquote().run())} />
+                <MenuButton compact icon={<BlockToolIcon type="copy" />} label="复制节点" shortcut={shortcutLabel('duplicateNode')} onRun={copyTargetNode} />
+                <MenuButton compact icon={<BlockToolIcon type="delete" />} label="删除节点" shortcut={shortcutLabel('deleteNode')} danger onRun={deleteTargetNode} />
               </MenuGroup>
               <MenuGroup label="格式">
                 <MenuButton hasSubmenu icon={<BlockToolIcon type="align-left" />} label="缩进和对齐" shortcut={shortcutLabel('alignLeft')} onHover={(event) => openCascadeMenu('alignment', event)} onRun={() => undefined} />
@@ -656,15 +665,11 @@ export function BlockContextToolbar({
                   <MenuButton label="图片说明" shortcut={shortcutLabel('imageCaption')} onRun={() => run(() => onEditImageCaption(target.pos))} />
                 </MenuGroup>
               ) : null}
-              <MenuGroup label="节点操作">
-                <MenuButton icon={<BlockToolIcon type="copy" />} label="复制节点" shortcut={shortcutLabel('duplicateNode')} onRun={copyTargetNode} />
-                <MenuButton icon={<BlockToolIcon type="delete" />} label="删除节点" shortcut={shortcutLabel('deleteNode')} danger onRun={deleteTargetNode} />
-              </MenuGroup>
             </div>
           ) : null}
           {menuOpen && cascadeMenu ? (
             <div
-              className="z-50 w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-xl"
+              className="z-50 w-48 rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl"
               style={{ position: 'fixed', top: cascadeMenu.top, left: cascadeMenu.left }}
               role="menu"
               aria-label={cascadeMenuTitle(cascadeMenu.view)}
@@ -767,9 +772,9 @@ function MenuGroup({
   children: ReactNode;
 }) {
   return (
-    <div className="border-b border-gray-100 py-2 first:pt-0 last:border-b-0 last:pb-0">
-      <div className={compact ? 'sr-only' : 'mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-gray-400'}>{label}</div>
-      <div className={compact ? 'grid grid-cols-5 gap-1' : 'flex flex-col gap-0.5'}>{children}</div>
+    <div className="border-b border-gray-100 py-1.5 first:pt-0 last:border-b-0 last:pb-0">
+      <div className={compact ? 'sr-only' : 'mb-1 px-1 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-400'}>{label}</div>
+      <div className={compact ? 'grid grid-cols-5 gap-0.5' : 'flex flex-col'}>{children}</div>
     </div>
   );
 }
@@ -799,7 +804,7 @@ function MenuButton({
     <button
       aria-label={`${label}，快捷键 ${shortcut}`}
       title={`${label} · ${shortcut}`}
-      className={`${compact ? 'group relative flex h-11 items-center justify-center rounded-lg px-1 text-base' : 'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm'} ${
+      className={`${compact ? 'group relative flex h-10 items-center justify-center rounded-lg px-1 text-base' : 'flex min-h-8 w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[13px] leading-5'} ${
         danger
           ? 'text-red-700 hover:bg-red-50'
           : active
@@ -808,6 +813,7 @@ function MenuButton({
       }`}
       type="button"
       role="menuitem"
+      data-has-submenu={hasSubmenu ? 'true' : undefined}
       onMouseDown={(event) => event.preventDefault()}
       onMouseOver={onHover}
       onClick={(event) => onHover ? onHover(event) : onRun()}
@@ -1245,13 +1251,42 @@ function runShortcutAction(
       return updateTextStyleMark(editor, range, { fontSize });
     }
     case 'duplicateNode':
-      void navigator.clipboard.writeText(JSON.stringify(block.node.toJSON()));
+      void copyNodeAsRichContent(block.node, editor.schema);
       return true;
     case 'deleteNode':
       return editor.chain().focus().deleteRange({ from: block.pos, to: block.end }).run();
     default:
       return false;
   }
+}
+
+async function copyNodeAsRichContent(node: ProseMirrorNode, schema: Schema): Promise<void> {
+  const container = document.createElement('div');
+  container.appendChild(DOMSerializer.fromSchema(schema).serializeNode(node));
+  const html = container.innerHTML;
+  const plainText = node.textBetween(0, node.content.size, '\n') || node.textContent;
+
+  if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([plainText], { type: 'text/plain' }),
+        }),
+      ]);
+      return;
+    } catch {
+      // Fall through to the synchronous clipboard event for older/restricted browsers.
+    }
+  }
+
+  const handleCopy = (event: ClipboardEvent) => {
+    event.preventDefault();
+    event.clipboardData?.setData('text/html', html);
+    event.clipboardData?.setData('text/plain', plainText);
+  };
+  document.addEventListener('copy', handleCopy, { once: true });
+  document.execCommand('copy');
 }
 
 function isMacPlatform() {

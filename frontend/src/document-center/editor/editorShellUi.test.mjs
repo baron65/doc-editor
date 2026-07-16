@@ -59,6 +59,10 @@ test('管理端左侧文档栏固定在视口并独立滚动', () => {
   assert.match(adminPageSource, sidebarPattern);
 });
 
+test('页面根级关闭滚动边界回弹', () => {
+  assert.match(globalCssSource, /html,\s*body\s*\{[^}]*overscroll-behavior:\s*none/);
+});
+
 test('发布操作栏滚动时保持在可视范围', () => {
   assert.match(editorSource, /sticky top-0 z-20[^"\n]*bg-white[^"\n]*shadow-sm/);
   assert.match(adminPageSource, /<section className="min-w-0 flex-1">/);
@@ -139,10 +143,17 @@ test('鼠标进入手柄时临时高亮目标节点', () => {
 });
 
 test('气泡采用窄宽度并优先向正文外侧展开', () => {
-  assert.match(blockToolbarSource, /w-60/);
+  assert.match(blockToolbarSource, /w-56/);
   assert.match(blockToolbarSource, /getBlockMenuSide/);
   assert.match(blockToolbarSource, /right-9/);
   assert.match(blockToolbarSource, /left-9/);
+});
+
+test('块工具箱和级联菜单使用紧凑宽度及纵向密度', () => {
+  assert.match(blockToolbarSource, /w-56 max-h-\[min\(40rem,calc\(100vh-2rem\)\)\]/);
+  assert.match(blockToolbarSource, /className="z-50 w-48 rounded-xl/);
+  assert.match(blockToolbarSource, /border-b border-gray-100 py-1\.5/);
+  assert.match(blockToolbarSource, /min-h-8 w-full[^"]*px-2 py-1\.5 text-left text-\[13px\]/);
 });
 
 test('列表引用代码使用语义图标并提供 hover 级联格式菜单', () => {
@@ -159,13 +170,28 @@ test('列表引用代码使用语义图标并提供 hover 级联格式菜单', (
   assert.doesNotMatch(blockToolbarSource, />←</);
 });
 
+test('鼠标移入无二级菜单的工具项时关闭已有级联菜单', () => {
+  assert.match(blockToolbarSource, /menuItem\.dataset\.hasSubmenu !== 'true'/);
+  assert.match(blockToolbarSource, /setCascadeMenu\(undefined\)/);
+  assert.match(blockToolbarSource, /data-has-submenu=\{hasSubmenu \? 'true' : undefined\}/);
+});
+
 test('块菜单支持复制和删除精确节点', () => {
   assert.match(blockToolbarSource, /copyTargetNode/);
-  assert.match(blockToolbarSource, /navigator\.clipboard\.writeText/);
+  assert.match(blockToolbarSource, /copyNodeAsRichContent/);
+  assert.match(blockToolbarSource, /DOMSerializer\.fromSchema\(schema\)\.serializeNode\(node\)/);
+  assert.match(blockToolbarSource, /'text\/html': new Blob\(\[html\]/);
+  assert.match(blockToolbarSource, /'text\/plain': new Blob\(\[plainText\]/);
+  assert.doesNotMatch(blockToolbarSource, /clipboard\.writeText\(JSON\.stringify/);
   assert.doesNotMatch(blockToolbarSource, /insertContentAt\(target\.end, target\.node\.toJSON\(\)\)/);
   assert.match(blockToolbarSource, /deleteTargetNode/);
-  assert.match(blockToolbarSource, /target\.node\.toJSON\(\)/);
   assert.match(blockToolbarSource, /\.delete\(target\.pos, target\.end\)/);
+});
+
+test('复制和删除节点以图标形式放在顶部紧凑工具区', () => {
+  assert.match(blockToolbarSource, /<MenuButton compact icon=\{<BlockToolIcon type="copy" \/>\} label="复制节点"/);
+  assert.match(blockToolbarSource, /<MenuButton compact icon=\{<BlockToolIcon type="delete" \/>\} label="删除节点"/);
+  assert.doesNotMatch(blockToolbarSource, /<MenuGroup label="节点操作">/);
 });
 
 test('块菜单补齐任务清单、字号、下划线和删除线工具', () => {
