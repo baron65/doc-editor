@@ -135,7 +135,7 @@ export function CodeBlockNodeView({ node, updateAttributes }: ReactNodeViewProps
       </header>
       <NodeViewContent
         as="pre"
-        className="code-block-editor-content m-0 bg-[#1e1e1e] p-4 text-sm leading-6 text-[#d4d4d4]"
+        className="hljs code-block-editor-content m-0 bg-[#1e1e1e] p-4 text-sm leading-6 text-[#d4d4d4]"
         spellCheck={false}
         style={{
           whiteSpace: wrap ? 'pre-wrap' : 'pre',

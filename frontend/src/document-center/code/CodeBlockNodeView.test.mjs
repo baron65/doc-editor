@@ -11,6 +11,7 @@ test('代码块节点提供语言搜索、换行和复制操作', () => {
   assert.match(source, /navigator\.clipboard\.writeText/);
   assert.match(source, /contentEditable=\{false\}/);
   assert.match(source, /<NodeViewContent/);
+  assert.match(source, /className="hljs code-block-editor-content/);
 });
 
 test('代码块语言菜单支持点击外部和 Escape 关闭', () => {
