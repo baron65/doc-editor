@@ -489,3 +489,18 @@ body.resize-cursor * {
   max-width: 100%;
   height: auto;
 }
+
+.mermaid-renderer svg text {
+  fill: #1f2937;
+}
+
+.mermaid-renderer .nodeLabel,
+.mermaid-renderer .edgeLabel {
+  color: #1f2937;
+}
+
+.mermaid-renderer .nodeLabel p,
+.mermaid-renderer .edgeLabel p {
+  margin: 0;
+  line-height: 1.2;
+}

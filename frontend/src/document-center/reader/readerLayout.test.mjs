@@ -7,7 +7,9 @@ const treeSource = readFileSync(
   'utf8',
 );
 const readerSource = readFileSync(new URL('./DocumentReader.tsx', import.meta.url), 'utf8');
+const pageSource = readFileSync(new URL('../../pages/document-center/index.tsx', import.meta.url), 'utf8');
 const codeBlockSource = readFileSync(new URL('./CodeBlock.tsx', import.meta.url), 'utf8');
+const mermaidSource = readFileSync(new URL('../mermaid/MermaidRenderer.tsx', import.meta.url), 'utf8');
 const globalStyles = readFileSync(new URL('../../global.css', import.meta.url), 'utf8');
 const editorSource = readFileSync(new URL('../editor/DocumentEditorShell.tsx', import.meta.url), 'utf8');
 const calloutSource = readFileSync(new URL('../callout/CalloutExtension.ts', import.meta.url), 'utf8');
@@ -27,6 +29,22 @@ test('本页目录过长时在视口内独立滚动', () => {
   assert.match(readerSource, /sticky top-0 hidden w-52[^"\n]*overflow-y-auto[^"\n]*xl:block/);
   assert.match(readerSource, /containedScroll \? 'max-h-full' : 'max-h-\[calc\(100vh-4rem\)\]'/);
   assert.match(readerSource, /containedScroll \? 'h-full overflow-y-auto overscroll-contain' : ''/);
+});
+
+test('文档异步加载后会重新定位初始 hash 锚点', () => {
+  assert.match(pageSource, /location\.hash/);
+  assert.match(pageSource, /requestAnimationFrame/);
+  assert.match(pageSource, /getElementById/);
+  assert.match(pageSource, /scrollIntoView/);
+});
+
+test('Mermaid SVG 内的文本不受正文段落样式影响', () => {
+  assert.match(globalStyles, /\.mermaid-renderer \.nodeLabel p,[\s\S]*\.mermaid-renderer \.edgeLabel p\s*\{[^}]*margin:\s*0/);
+  assert.match(globalStyles, /\.mermaid-renderer svg text\s*\{[^}]*fill:/);
+});
+
+test('Mermaid 阅读器关闭 HTML labels，避免 foreignObject 标签被清空', () => {
+  assert.match(mermaidSource, /flowchart:\s*\{[\s\S]*htmlLabels:\s*false/);
 });
 
 test('富文本 mark 包装元素保留列表 key', () => {

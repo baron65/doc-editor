@@ -23,6 +23,9 @@ export function MermaidRenderer({ source }: MermaidRendererProps) {
           mermaid.initialize({
             startOnLoad: false,
             securityLevel: 'strict',
+            flowchart: {
+              htmlLabels: false,
+            },
             theme: 'default',
           });
           mermaidInitialized = true;

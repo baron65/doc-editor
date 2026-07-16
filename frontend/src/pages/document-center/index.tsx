@@ -33,6 +33,36 @@ export default function DocumentCenterPage() {
     }
   }, [documentId, tree?.defaultDocumentId, treeRequest.loading]);
 
+  useEffect(() => {
+    if (!document || !documentId || !globalThis.location.hash) {
+      return undefined;
+    }
+
+    let targetId = globalThis.location.hash.slice(1);
+    try {
+      targetId = decodeURIComponent(targetId);
+    } catch {
+      return undefined;
+    }
+
+    let frame = 0;
+    let attempts = 0;
+    const scrollToHashTarget = () => {
+      const target = globalThis.document.getElementById(targetId);
+      if (target) {
+        target.scrollIntoView({ block: 'start' });
+        return;
+      }
+      if (attempts < 10) {
+        attempts += 1;
+        frame = window.requestAnimationFrame(scrollToHashTarget);
+      }
+    };
+
+    frame = window.requestAnimationFrame(scrollToHashTarget);
+    return () => window.cancelAnimationFrame(frame);
+  }, [document?.documentId, documentId]);
+
   return (
     <main className="mx-auto flex max-w-[90rem] gap-4 px-4 py-6 sm:px-6 sm:py-8 xl:gap-6">
       <ResponsiveDocumentTree
