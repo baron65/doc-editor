@@ -146,6 +146,23 @@ body {
   outline-offset: 2px;
 }
 
+.document-editor .code-block-editor pre {
+  min-height: 3.5rem;
+  margin: 0;
+  padding: 1rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  box-shadow: none;
+}
+
+.document-editor .code-block-editor pre::before {
+  content: none;
+}
+
+.document-editor .code-block-editor.ProseMirror-selectednode {
+  outline: 2px solid #007acc;
+  outline-offset: 2px;
+}
+
 .document-table-wrapper,
 .document-editor .tableWrapper {
   margin: 1rem 0;

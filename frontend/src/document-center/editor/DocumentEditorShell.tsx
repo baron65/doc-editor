@@ -161,7 +161,6 @@ export const DocumentEditorShell = forwardRef<DocumentEditorShellHandle, Documen
       return;
     }
     const nextContent = normalizeMermaidCodeBlocks(document.content ?? emptyDocumentContent);
-    hydratingRef.current = true;
     conflictRef.current = false;
     dirtyRef.current = false;
     setTitle(document.title);
@@ -174,8 +173,13 @@ export const DocumentEditorShell = forwardRef<DocumentEditorShellHandle, Documen
     setSaveState('saved');
     setErrorMessage(undefined);
     setStatus(document.published ? '线上稿已发布，可继续编辑草稿。' : '当前为草稿态。');
-    editor?.commands.setContent(nextContent);
-    hydratingRef.current = false;
+    const hydrationFrame = window.requestAnimationFrame(() => {
+      if (!editor) return;
+      hydratingRef.current = true;
+      editor.commands.setContent(nextContent);
+      hydratingRef.current = false;
+    });
+    return () => window.cancelAnimationFrame(hydrationFrame);
   }, [document, editor]);
 
   useEffect(() => {
@@ -485,25 +489,15 @@ export const DocumentEditorShell = forwardRef<DocumentEditorShellHandle, Documen
     setStatus('Mermaid 流程图已插入。发布前请在预览/用户端确认渲染结果。');
   };
 
-  const insertCodeBlock = async (position: number) => {
+  const insertCodeBlock = (position: number) => {
     if (!editor) {
-      return;
-    }
-    const language = await prompt({
-      title: '插入代码块',
-      description: '请输入代码语言，用于语法高亮。',
-      initialValue: 'java',
-      placeholder: 'java、json、bash',
-      confirmText: '插入代码块',
-    });
-    if (language === undefined) {
       return;
     }
     editor
       .chain()
       .focus()
       .setTextSelection(position)
-      .setCodeBlock({ language: language.trim() || 'plaintext' })
+      .setCodeBlock({ language: 'plaintext' })
       .run();
   };
 

@@ -6,10 +6,12 @@ import { mergeAttributes } from '@tiptap/core';
 import { AttachmentExtension } from '../attachment/AttachmentExtension';
 import { CalloutExtension } from '../callout/CalloutExtension';
 import { MermaidExtension } from '../mermaid/MermaidExtension';
+import { CodeBlockExtension } from '../code/CodeBlockExtension';
 
 export function createDocumentSchemaExtensions() {
   return [
     StarterKit.configure({
+      codeBlock: false,
       heading: {
         levels: [1, 2, 3, 4, 5],
       },
@@ -55,5 +57,6 @@ export function createDocumentSchemaExtensions() {
     AttachmentExtension,
     CalloutExtension,
     MermaidExtension,
+    CodeBlockExtension,
   ];
 }

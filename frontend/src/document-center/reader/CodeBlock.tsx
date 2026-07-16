@@ -11,6 +11,7 @@ import sql from 'highlight.js/lib/languages/sql';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
+import { normalizeCodeLanguage } from '../code/codeLanguages';
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('css', css);
 hljs.registerLanguage('java', java);
@@ -23,20 +24,9 @@ hljs.registerLanguage('typescript', typescript);
 hljs.registerLanguage('xml', xml);
 hljs.registerLanguage('yaml', yaml);
 
-const aliases: Record<string, string> = {
-  html: 'xml',
-  js: 'javascript',
-  md: 'markdown',
-  py: 'python',
-  sh: 'bash',
-  shell: 'bash',
-  ts: 'typescript',
-  yml: 'yaml',
-};
-
 export function CodeBlock({ code, language }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
-  const normalizedLanguage = normalizeLanguage(language);
+  const normalizedLanguage = normalizeCodeLanguage(language);
   const highlighted = hljs.getLanguage(normalizedLanguage)
     ? hljs.highlight(code, { language: normalizedLanguage, ignoreIllegals: true }).value
     : undefined;
@@ -67,9 +57,4 @@ export function CodeBlock({ code, language }: { code: string; language?: string 
       </pre>
     </section>
   );
-}
-
-function normalizeLanguage(language?: string) {
-  const normalized = language?.trim().toLowerCase() || 'plaintext';
-  return aliases[normalized] ?? normalized;
 }

@@ -10,6 +10,7 @@ const adminPageSource = readFileSync(
 const blockToolbarSource = readFileSync(new URL('./BlockContextToolbar.tsx', import.meta.url), 'utf8');
 const blockHighlightSource = readFileSync(new URL('./BlockHighlightExtension.ts', import.meta.url), 'utf8');
 const documentExtensionsSource = readFileSync(new URL('./documentExtensions.ts', import.meta.url), 'utf8');
+const documentSchemaExtensionsSource = readFileSync(new URL('./documentSchemaExtensions.ts', import.meta.url), 'utf8');
 const globalCssSource = readFileSync(new URL('../../global.css', import.meta.url), 'utf8');
 const tablePickerSource = readFileSync(new URL('./TableSizePicker.tsx', import.meta.url), 'utf8');
 
@@ -39,6 +40,18 @@ test('管理端不展示开发调试入口和手动保存按钮', () => {
   assert.doesNotMatch(editorSource, /查看当前 Tiptap JSON/);
   assert.doesNotMatch(editorSource, /JSON\.stringify\(content/);
   assert.match(editorSource, /自动保存失败/);
+});
+
+test('插入代码块直接创建纯文本节点并由节点内选择语言', () => {
+  assert.match(editorSource, /setCodeBlock\(\{ language: 'plaintext' \}\)/);
+  assert.doesNotMatch(editorSource, /title: '插入代码块'/);
+  assert.match(documentSchemaExtensionsSource, /codeBlock: false/);
+  assert.match(documentSchemaExtensionsSource, /CodeBlockExtension/);
+});
+
+test('文档内容在 React 生命周期结束后挂载自定义节点视图', () => {
+  assert.match(editorSource, /requestAnimationFrame\(\(\) => \{/);
+  assert.match(editorSource, /cancelAnimationFrame/);
 });
 
 test('管理端左侧文档栏固定在视口并独立滚动', () => {
