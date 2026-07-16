@@ -64,7 +64,7 @@ export default function DocumentCenterPage() {
   }, [document?.documentId, documentId]);
 
   return (
-    <main className="mx-auto flex max-w-[90rem] gap-4 px-4 py-6 sm:px-6 sm:py-8 xl:gap-6">
+    <main className="mx-auto flex h-screen max-w-[90rem] items-stretch gap-4 overflow-hidden px-4 py-6 sm:px-6 sm:py-8 xl:gap-6">
       <ResponsiveDocumentTree
         nodes={tree?.nodes ?? []}
         activeDocumentId={documentId}
@@ -74,7 +74,7 @@ export default function DocumentCenterPage() {
           }
         }}
       />
-      <section className="min-w-0 flex-1">
+      <section className="h-full min-h-0 min-w-0 flex-1 overflow-hidden">
         {treeRequest.loading || (documentId && detailRequest.loading) ? (
           <div className="text-sm text-gray-500">加载中...</div>
         ) : documentId && detailRequest.error ? (
@@ -89,7 +89,12 @@ export default function DocumentCenterPage() {
             </button>
           </div>
         ) : documentId ? (
-          <DocumentReader document={document} previous={navigation.previous} next={navigation.next} />
+          <DocumentReader
+            containedScroll
+            document={document}
+            previous={navigation.previous}
+            next={navigation.next}
+          />
         ) : (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
             {tree?.defaultDocumentId ? '正在打开第一篇文档...' : '暂无已发布文档'}

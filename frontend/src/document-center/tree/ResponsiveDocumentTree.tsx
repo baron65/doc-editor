@@ -28,7 +28,7 @@ export function ResponsiveDocumentTree({ nodes, activeDocumentId, onSelect }: Re
       </button>
       <aside
         data-desktop-document-tree="true"
-        className="sticky top-8 hidden max-h-[calc(100vh-4rem)] w-52 shrink-0 self-start overflow-y-auto lg:block xl:w-56"
+        className="hidden h-full max-h-full w-52 shrink-0 self-start overflow-y-auto lg:block xl:w-56"
       >
         <h1 className="mb-4 text-xl font-semibold text-gray-950">文档中心</h1>
         <DocumentTreePanel

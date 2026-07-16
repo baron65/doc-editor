@@ -25,6 +25,13 @@ test('正文卡片在小屏使用紧凑内边距', () => {
   assert.match(readerSource, /p-5[^"\n]*sm:p-6 lg:p-8/);
 });
 
+test('用户端三栏固定在视口内且仅正文区域独立滚动', () => {
+  assert.match(pageSource, /h-screen[^"\n]*overflow-hidden/);
+  assert.match(pageSource, /h-full min-h-0 min-w-0 flex-1 overflow-hidden/);
+  assert.match(pageSource, /<DocumentReader[\s\S]*?containedScroll/);
+  assert.match(treeSource, /hidden h-full max-h-full[^"\n]*overflow-y-auto/);
+});
+
 test('本页目录过长时在视口内独立滚动', () => {
   assert.match(readerSource, /sticky top-0 hidden w-52[^"\n]*overflow-y-auto[^"\n]*xl:block/);
   assert.match(readerSource, /containedScroll \? 'max-h-full' : 'max-h-\[calc\(100vh-4rem\)\]'/);
