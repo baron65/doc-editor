@@ -7,6 +7,38 @@ import { AttachmentExtension } from '../attachment/AttachmentExtension';
 import { CalloutExtension } from '../callout/CalloutExtension';
 import { MermaidExtension } from '../mermaid/MermaidExtension';
 import { CodeBlockExtension } from '../code/CodeBlockExtension';
+import { normalizeTextBackgroundColor } from '../content/blockFormatting';
+
+const tableCellBackgroundAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) => normalizeTextBackgroundColor(
+    element.getAttribute('data-background-color') ?? element.style.backgroundColor,
+  ),
+  renderHTML: (attributes: Record<string, unknown>) => {
+    const backgroundColor = normalizeTextBackgroundColor(attributes.backgroundColor);
+    return backgroundColor
+      ? { 'data-background-color': backgroundColor, style: `background-color: ${backgroundColor}` }
+      : {};
+  },
+};
+
+const DocumentTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: tableCellBackgroundAttribute,
+    };
+  },
+});
+
+const DocumentTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: tableCellBackgroundAttribute,
+    };
+  },
+});
 
 export function createDocumentSchemaExtensions() {
   return [
@@ -50,8 +82,8 @@ export function createDocumentSchemaExtensions() {
       allowTableNodeSelection: true,
     }),
     TableRow,
-    TableHeader,
-    TableCell,
+    DocumentTableHeader,
+    DocumentTableCell,
     TaskList,
     TaskItem.configure({ nested: true }),
     AttachmentExtension,

@@ -200,9 +200,9 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
     case 'tableRow':
       return <tr key={key}>{renderChildren(node.content, documentId, assetScope)}</tr>;
     case 'tableHeader':
-      return <th key={key} {...buildReaderCellSpanProps(node)}>{renderChildren(node.content, documentId, assetScope)}</th>;
+      return <th key={key} {...buildReaderCellProps(node)}>{renderChildren(node.content, documentId, assetScope)}</th>;
     case 'tableCell':
-      return <td key={key} {...buildReaderCellSpanProps(node)}>{renderChildren(node.content, documentId, assetScope)}</td>;
+      return <td key={key} {...buildReaderCellProps(node)}>{renderChildren(node.content, documentId, assetScope)}</td>;
     case 'callout': {
       const kind = typeof node.attrs?.kind === 'string' ? node.attrs.kind : 'info';
       return (
@@ -263,15 +263,18 @@ function buildReaderTableLayout(node: DocumentContent): {
   };
 }
 
-function buildReaderCellSpanProps(node: DocumentContent): {
+function buildReaderCellProps(node: DocumentContent): {
   colSpan?: number;
   rowSpan?: number;
+  style?: CSSProperties;
 } {
   const colSpan = normalizeTableSpan(node.attrs?.colspan);
   const rowSpan = normalizeTableSpan(node.attrs?.rowspan);
+  const backgroundColor = normalizeTextBackgroundColor(node.attrs?.backgroundColor);
   return {
     colSpan: colSpan > 1 ? colSpan : undefined,
     rowSpan: rowSpan > 1 ? rowSpan : undefined,
+    style: backgroundColor ? { backgroundColor } : undefined,
   };
 }
 

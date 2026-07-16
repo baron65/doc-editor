@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const toolbarSource = readFileSync(new URL('./TableContextToolbar.tsx', import.meta.url), 'utf8');
 const keyboardSource = readFileSync(new URL('./TableKeyboardExtension.ts', import.meta.url), 'utf8');
+const schemaSource = readFileSync(new URL('./documentSchemaExtensions.ts', import.meta.url), 'utf8');
 const shellSource = readFileSync(new URL('./DocumentEditorShell.tsx', import.meta.url), 'utf8');
 const globalStyles = readFileSync(new URL('../../global.css', import.meta.url), 'utf8');
 
@@ -23,7 +24,7 @@ test('表格专用工具条采用飞书式图标操作而不是旧的文字分�
 test('选中整行或整列后，图标工具栏可批量应用常用文本格式', () => {
   for (const command of [
     'toggleBold()', 'toggleItalic()', 'toggleStrike()', 'toggleUnderline()',
-    'setTextColor(value)', 'setTextBackgroundColor(value)',
+    'setTextColor(value)',
   ]) {
     assert.match(toolbarSource, new RegExp(command.replace(/[()]/g, '\\$&')));
   }
@@ -54,6 +55,24 @@ test('表格工具条和颜色级联面板有独立视觉层', () => {
   assert.match(globalStyles, /\.table-context-toolbar/);
   assert.match(globalStyles, /\.table-format-popover/);
   assert.match(globalStyles, /\.table-tool-button/);
+});
+
+test('单元格背景写入单元格属性而不是文字背景 mark', () => {
+  assert.match(toolbarSource, /setCellAttribute\('backgroundColor', value\)/);
+  assert.doesNotMatch(toolbarSource, /setTextBackgroundColor\(value\)/);
+  assert.match(schemaSource, /backgroundColor:\s*tableCellBackgroundAttribute/);
+  assert.match(schemaSource, /data-background-color/);
+});
+
+test('表格工具栏复用文字选区工具栏的视觉规格', () => {
+  assert.match(globalStyles, /\.table-context-toolbar\s*\{[^}]*border-radius:\s*0\.5rem/);
+  assert.match(globalStyles, /\.table-context-toolbar\s*\{[^}]*padding:\s*0\.25rem/);
+  assert.match(toolbarSource, /table-tool-button group relative flex h-8 w-8 flex-none items-center justify-center rounded-md/);
+  assert.match(toolbarSource, /bg-brand-50 text-brand-700/);
+  assert.match(toolbarSource, /<InlineToolIcon type="bold"/);
+  assert.match(toolbarSource, /<InlineToolIcon type="code"/);
+  assert.doesNotMatch(globalStyles, /\.table-tool-button\s*\{[^}]*display:\s*grid/);
+  assert.match(globalStyles, /\.table-tool-tooltip\s*\{[^}]*background:\s*#111827/);
 });
 
 test('表格边缘采用连续轨道选择行列，并在任意边界显示插入控件', () => {
@@ -100,6 +119,27 @@ test('行列轨道内容居中并压缩单行高度', () => {
   assert.match(globalStyles, /\.document-body th > p,[\s\S]*?min-height:\s*1\.5em/);
   assert.match(globalStyles, /padding:\s*0\.375rem 0\.625rem/);
   assert.match(globalStyles, /\.table-row-rail,[\s\S]*?margin-top:\s*0 !important/);
+});
+
+test('行列导轨紧贴表格边线且表格外边线清晰', () => {
+  assert.match(toolbarSource, /const railOffset = 9/);
+  assert.match(globalStyles, /\.table-column-rail\s*\{[^}]*height:\s*0\.5625rem/);
+  assert.match(globalStyles, /\.table-row-rail\s*\{[^}]*width:\s*0\.5625rem/);
+  assert.match(globalStyles, /\.document-body table\s*\{[^}]*border:\s*1px solid #d8dce5/);
+});
+
+test('横向滚动表格时左侧行导轨固定在滚动容器边界', () => {
+  assert.match(toolbarSource, /const wrapperRect = elements\.wrapper\.getBoundingClientRect\(\)/);
+  assert.match(toolbarSource, /style=\{\{ left: wrapperRect\.left - railOffset, top: tableRect\.top, height: tableRect\.height \}\}/);
+  assert.match(toolbarSource, /style=\{\{ left: wrapperRect\.left - railOffset, top: boundary \}\}/);
+  assert.match(toolbarSource, /style=\{\{ left: wrapperRect\.left, top: boundary, width: wrapperRect\.width \}\}/);
+});
+
+test('横向滚动表格时顶部列导轨裁剪在滚动容器内', () => {
+  assert.match(toolbarSource, /style=\{\{ left: wrapperRect\.left, top: tableRect\.top - railOffset, width: wrapperRect\.width \}\}/);
+  assert.match(toolbarSource, /style=\{\{ left: column\.start - wrapperRect\.left, width: column\.size \}\}/);
+  assert.match(toolbarSource, /boundary < wrapperRect\.left \|\| boundary > wrapperRect\.right/);
+  assert.match(globalStyles, /\.table-column-rail\s*\{[^}]*overflow:\s*hidden/);
 });
 
 test('导轨使用半宽样式，仅移除选择段中央圆点并保留边界圆点', () => {

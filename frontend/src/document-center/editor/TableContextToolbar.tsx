@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/core';
 import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { InlineToolIcon } from './InlineToolIcon';
 import {
   SAFE_FONT_SIZES,
   SAFE_TEXT_BACKGROUND_COLORS,
@@ -44,6 +45,7 @@ interface ToolbarState {
   context: TableContextState;
   position: TableToolbarPosition;
   tableRect: Pick<DOMRect, 'top' | 'left' | 'right' | 'bottom' | 'width' | 'height'>;
+  wrapperRect: Pick<DOMRect, 'top' | 'left' | 'right' | 'bottom' | 'width' | 'height'>;
   isHeaderRow: boolean;
   rows: AxisSegment[];
   columns: AxisSegment[];
@@ -82,11 +84,13 @@ export function TableContextToolbar({
       return;
     }
     const tableRect = elements.table.getBoundingClientRect();
+    const wrapperRect = elements.wrapper.getBoundingClientRect();
     const activeRow = elements.table.rows.item(context.rowIndex);
     setToolbarState({
       context,
-      position: getTableToolbarPosition(elements.wrapper.getBoundingClientRect(), window.innerWidth),
+      position: getTableToolbarPosition(wrapperRect, window.innerWidth),
       tableRect,
+      wrapperRect,
       isHeaderRow: Boolean(activeRow?.cells.length)
         && Array.from(activeRow?.cells ?? []).every((cell) => cell.tagName === 'TH'),
       rows: getRowSegments(elements.table),
@@ -125,10 +129,10 @@ export function TableContextToolbar({
 
   if (!editor || !toolbarState) return null;
 
-  const { columns, context, isHeaderRow, position, rows, tableRect } = toolbarState;
+  const { columns, context, isHeaderRow, position, rows, tableRect, wrapperRect } = toolbarState;
   const toolbarWidth = Math.min(760, window.innerWidth - 32);
   const toolbarLeft = Math.max(16, Math.min(position.left, window.innerWidth - toolbarWidth - 16));
-  const railOffset = 13;
+  const railOffset = 9;
   const rowActive = context.selectionKind === 'row';
   const columnActive = context.selectionKind === 'column';
   const tableActive = context.selectionKind === 'table';
@@ -201,7 +205,7 @@ export function TableContextToolbar({
         className="table-master-handle"
         data-table-context-control
         data-tooltip="选择整张表格"
-        style={{ left: tableRect.left - 58, top: tableRect.top - 25 }}
+        style={{ left: wrapperRect.left - 58, top: tableRect.top - 25 }}
         type="button"
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => run(() => editor.chain().focus().setNodeSelection(context.tablePos).run())}
@@ -214,7 +218,7 @@ export function TableContextToolbar({
         aria-label="选择表格列"
         className="table-column-rail"
         data-table-context-control
-        style={{ left: tableRect.left, top: tableRect.top - railOffset, width: tableRect.width }}
+        style={{ left: wrapperRect.left, top: tableRect.top - railOffset, width: wrapperRect.width }}
       >
         {columns.map((column) => (
           <button
@@ -223,7 +227,7 @@ export function TableContextToolbar({
             aria-pressed={columnActive && context.columnIndex === column.index}
             className="table-column-rail-segment"
             type="button"
-            style={{ left: column.start - tableRect.left, width: column.size }}
+            style={{ left: column.start - wrapperRect.left, width: column.size }}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => chooseColumn(column.index)}
           />
@@ -234,7 +238,7 @@ export function TableContextToolbar({
         aria-label="选择表格行"
         className="table-row-rail"
         data-table-context-control
-        style={{ left: tableRect.left - railOffset, top: tableRect.top, height: tableRect.height }}
+        style={{ left: wrapperRect.left - railOffset, top: tableRect.top, height: tableRect.height }}
       >
         {rows.map((row) => (
           <button
@@ -258,36 +262,39 @@ export function TableContextToolbar({
           data-table-context-control
           data-tooltip="插入行"
           type="button"
-          style={{ left: tableRect.left - railOffset, top: boundary }}
+          style={{ left: wrapperRect.left - railOffset, top: boundary }}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => insertRowAt(index)}
         >
           <span aria-hidden>+</span>
-          <i className="table-insert-line is-row" style={{ left: tableRect.left, top: boundary, width: tableRect.width }} />
+          <i className="table-insert-line is-row" style={{ left: wrapperRect.left, top: boundary, width: wrapperRect.width }} />
         </button>
       ))}
 
-      {getBoundaries(columns, tableRect.left, tableRect.right).map((boundary, index) => (
-        <button
-          key={`column-boundary-${index}`}
-          aria-label={`在第 ${index + 1} 个列边界插入列`}
-          className="table-column-boundary-insert"
-          data-table-context-control
-          data-tooltip="插入列"
-          type="button"
-          style={{ left: boundary, top: tableRect.top - railOffset }}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => insertColumnAt(index)}
-        >
-          <span aria-hidden>+</span>
-          <i className="table-insert-line is-column" style={{ left: boundary, top: tableRect.top, height: tableRect.height }} />
-        </button>
-      ))}
+      {getBoundaries(columns, tableRect.left, tableRect.right).map((boundary, index) => {
+        if (boundary < wrapperRect.left || boundary > wrapperRect.right) return null;
+        return (
+          <button
+            key={`column-boundary-${index}`}
+            aria-label={`在第 ${index + 1} 个列边界插入列`}
+            className="table-column-boundary-insert"
+            data-table-context-control
+            data-tooltip="插入列"
+            type="button"
+            style={{ left: boundary, top: tableRect.top - railOffset }}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => insertColumnAt(index)}
+          >
+            <span aria-hidden>+</span>
+            <i className="table-insert-line is-column" style={{ left: boundary, top: tableRect.top, height: tableRect.height }} />
+          </button>
+        );
+      })}
 
       {showToolbar ? <div
         ref={toolbarRef}
         aria-label="表格操作工具栏"
-        className="table-context-toolbar"
+        className="table-context-toolbar rounded-lg border border-gray-200 bg-white p-1 shadow-xl"
         data-placement={position.placement}
         data-table-context-control
         role="toolbar"
@@ -336,12 +343,12 @@ export function TableContextToolbar({
             onRun={() => togglePanel(setFormatPanel, 'align')}
           />
           <ToolbarDivider />
-          <TableToolButton active={editor.isActive('bold')} aria-label="加粗" data-tooltip="加粗 ⌘B" icon={<TableToolIcon name="bold" />} onRun={() => run(() => editor.chain().focus().toggleBold().run())} />
-          <TableToolButton active={editor.isActive('strike')} aria-label="删除线" data-tooltip="删除线 ⌘⇧X" icon={<TableToolIcon name="strike" />} onRun={() => run(() => editor.chain().focus().toggleStrike().run())} />
-          <TableToolButton active={editor.isActive('italic')} aria-label="斜体" data-tooltip="斜体 ⌘I" icon={<TableToolIcon name="italic" />} onRun={() => run(() => editor.chain().focus().toggleItalic().run())} />
-          <TableToolButton active={editor.isActive('underline')} aria-label="下划线" data-tooltip="下划线 ⌘U" icon={<TableToolIcon name="underline" />} onRun={() => run(() => editor.chain().focus().toggleUnderline().run())} />
-          <TableToolButton active={editor.isActive('code')} aria-label="行内代码" data-tooltip="行内代码" icon={<TableToolIcon name="code" />} onRun={() => run(() => editor.chain().focus().toggleCode().run())} />
-          <TableToolButton aria-label="文字颜色" data-tooltip="文字颜色" icon={<TableToolIcon name="textColor" />} onRun={() => togglePanel(setFormatPanel, 'textColor')} />
+          <TableToolButton active={editor.isActive('bold')} aria-label="加粗" data-tooltip="加粗 ⌘B" icon={<InlineToolIcon type="bold" />} onRun={() => run(() => editor.chain().focus().toggleBold().run())} />
+          <TableToolButton active={editor.isActive('strike')} aria-label="删除线" data-tooltip="删除线 ⌘⇧X" icon={<InlineToolIcon type="strike" />} onRun={() => run(() => editor.chain().focus().toggleStrike().run())} />
+          <TableToolButton active={editor.isActive('italic')} aria-label="斜体" data-tooltip="斜体 ⌘I" icon={<InlineToolIcon type="italic" />} onRun={() => run(() => editor.chain().focus().toggleItalic().run())} />
+          <TableToolButton active={editor.isActive('underline')} aria-label="下划线" data-tooltip="下划线 ⌘U" icon={<InlineToolIcon type="underline" />} onRun={() => run(() => editor.chain().focus().toggleUnderline().run())} />
+          <TableToolButton active={editor.isActive('code')} aria-label="行内代码" data-tooltip="行内代码" icon={<InlineToolIcon type="code" />} onRun={() => run(() => editor.chain().focus().toggleCode().run())} />
+          <TableToolButton aria-label="文字颜色" data-tooltip="文字颜色" icon={<InlineToolIcon type="text-color" />} onRun={() => togglePanel(setFormatPanel, 'textColor')} />
           <ToolbarDivider />
           <TableToolButton
             danger
@@ -451,7 +458,13 @@ function TableToolButton({
         {...buttonProps}
         aria-describedby={tooltipPosition ? tooltipId : undefined}
         aria-pressed={active}
-        className={`table-tool-button ${active ? 'is-active' : ''} ${danger ? 'is-danger' : ''}`}
+        className={`table-tool-button group relative flex h-8 w-8 flex-none items-center justify-center rounded-md disabled:cursor-not-allowed disabled:text-gray-300 ${
+          danger
+            ? 'text-red-600 hover:bg-red-50'
+            : active
+              ? 'bg-brand-50 text-brand-700'
+              : 'text-gray-700 hover:bg-gray-50'
+        }`}
         disabled={disabled}
         type="button"
         onFocus={(event) => showTooltip(event.currentTarget)}
@@ -496,13 +509,7 @@ function TableToolIcon({ name }: { name: TableIconName }) {
     strokeLinejoin: 'round' as const,
     strokeWidth: 1.8,
   };
-  if (name === 'bold') return <strong aria-hidden className="table-text-icon">B</strong>;
-  if (name === 'italic') return <em aria-hidden className="table-text-icon">I</em>;
-  if (name === 'strike') return <span aria-hidden className="table-text-icon line-through">S</span>;
-  if (name === 'underline') return <span aria-hidden className="table-text-icon underline">U</span>;
   if (name === 'fontSize') return <span aria-hidden className="table-text-icon">T</span>;
-  if (name === 'textColor') return <span aria-hidden className="table-text-color-icon">A</span>;
-  if (name === 'code') return <span aria-hidden className="table-code-icon">&lt;/&gt;</span>;
   return (
     <svg aria-hidden="true" {...common}>
       {name === 'table' ? <><rect x="3" y="4" width="18" height="16" rx="1" /><path d="M3 9h18M8 4v16M14 4v16" /></> : null}
@@ -566,9 +573,7 @@ function applyTableColor(editor: Editor, panel: 'textColor' | 'backgroundColor',
       ? editor.chain().focus().setTextColor(value).run()
       : editor.chain().focus().unsetTextColor().run();
   }
-  return value
-    ? editor.chain().focus().setTextBackgroundColor(value).run()
-    : editor.chain().focus().unsetTextBackgroundColor().run();
+  return editor.chain().focus().setCellAttribute('backgroundColor', value).run();
 }
 
 function updateSelectedCellBlocks(editor: Editor, attributes: { textAlign: BlockTextAlign }): boolean {

@@ -81,6 +81,33 @@ test('Reader 按编辑器 colwidth 渲染列宽、表格宽度及合并单元格
   assert.match(html, /<td colspan="2" rowspan="2"/);
 });
 
+test('Reader 将单元格背景色渲染到单元格本身', () => {
+  const html = renderToStaticMarkup(
+    <DocumentReader
+      document={{
+        documentId: 'cell-background',
+        title: '单元格背景',
+        content: {
+          type: 'doc',
+          content: [{
+            type: 'table',
+            content: [{
+              type: 'tableRow',
+              content: [{
+                type: 'tableCell',
+                attrs: { backgroundColor: '#fff2cc' },
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: '内容' }] }],
+              }],
+            }],
+          }],
+        },
+      }}
+    />,
+  );
+
+  assert.match(html, /<td style="background-color:#fff2cc"/);
+});
+
 test('Reader 渲染带语义样式的提示块', () => {
   const html = renderToStaticMarkup(
     <DocumentReader
