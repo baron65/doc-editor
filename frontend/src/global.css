@@ -80,6 +80,35 @@ body {
   list-style: decimal;
 }
 
+.document-body ol.code-line-numbers {
+  margin: 0;
+  min-width: 3rem;
+  padding-right: 0.75rem;
+  padding-left: 0.75rem;
+  list-style: none;
+  line-height: 1.5rem;
+}
+
+.document-body ol.code-line-numbers li {
+  height: 1.5rem;
+  list-style: none;
+  line-height: 1.5rem;
+}
+
+.document-body ol.code-line-numbers li::marker {
+  content: '';
+}
+
+.document-body pre code.hljs {
+  overflow: visible;
+  padding: 0;
+  line-height: 1.5rem;
+}
+
+.document-body pre.code-block-editor-content {
+  line-height: 1.5rem;
+}
+
 .document-body blockquote {
   margin: 1rem 0;
   border-left: 3px solid #dbeafe;

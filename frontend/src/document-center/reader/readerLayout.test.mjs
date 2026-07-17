@@ -9,6 +9,8 @@ const treeSource = readFileSync(
 const readerSource = readFileSync(new URL('./DocumentReader.tsx', import.meta.url), 'utf8');
 const pageSource = readFileSync(new URL('../../pages/document-center/index.tsx', import.meta.url), 'utf8');
 const codeBlockSource = readFileSync(new URL('./CodeBlock.tsx', import.meta.url), 'utf8');
+const copyTextSource = readFileSync(new URL('../copyText.ts', import.meta.url), 'utf8');
+const codeBlockNodeViewSource = readFileSync(new URL('../code/CodeBlockNodeView.tsx', import.meta.url), 'utf8');
 const mermaidSource = readFileSync(new URL('../mermaid/MermaidRenderer.tsx', import.meta.url), 'utf8');
 const globalStyles = readFileSync(new URL('../../global.css', import.meta.url), 'utf8');
 const editorSource = readFileSync(new URL('../editor/DocumentEditorShell.tsx', import.meta.url), 'utf8');
@@ -82,6 +84,32 @@ test('编辑器和阅读器共享同一套正文视觉层', () => {
   assert.match(globalStyles, /\.document-body table/);
   assert.match(globalStyles, /\.document-body img/);
   assert.match(globalStyles, /\.document-body code:not\(pre code\)/);
+});
+
+test('代码块复制兼容非安全上下文并显示失败反馈', () => {
+  assert.match(copyTextSource, /navigator\.clipboard\?\.writeText/);
+  assert.match(copyTextSource, /document\.execCommand\('copy'\)/);
+  assert.match(codeBlockSource, /复制失败/);
+  assert.match(copyTextSource, /clipboardData\?\.setData\('text\/plain'/);
+});
+
+test('编辑端与阅读端代码块均展示不参与复制的逻辑行号', () => {
+  assert.match(codeBlockSource, /getCodeLineNumbers/);
+  assert.match(codeBlockNodeViewSource, /getCodeLineNumbers/);
+  assert.match(codeBlockSource, /code-line-numbers/);
+  assert.match(codeBlockSource, /list-none/);
+  assert.match(codeBlockNodeViewSource, /code-line-numbers/);
+  assert.match(codeBlockNodeViewSource, /list-none/);
+  assert.match(globalStyles, /\.document-body ol\.code-line-numbers\s*\{[^}]*list-style:\s*none/);
+  assert.match(globalStyles, /\.document-body ol\.code-line-numbers\s*\{[^}]*padding-left:\s*0\.75rem/);
+  assert.match(globalStyles, /\.document-body ol\.code-line-numbers\s*\{[^}]*min-width:\s*3rem/);
+  assert.match(globalStyles, /\.document-body ol\.code-line-numbers li\s*\{[^}]*line-height:\s*1\.5rem/);
+  assert.match(globalStyles, /\.document-body pre code\.hljs\s*\{[^}]*padding:\s*0/);
+  assert.match(globalStyles, /\.document-body pre code\.hljs\s*\{[^}]*line-height:\s*1\.5rem/);
+  assert.match(globalStyles, /\.document-body pre\.code-block-editor-content\s*\{[^}]*line-height:\s*1\.5rem/);
+  assert.match(globalStyles, /\.document-body ol\.code-line-numbers li::marker\s*\{[^}]*content:\s*''/);
+  assert.match(codeBlockSource, /aria-hidden/);
+  assert.match(codeBlockNodeViewSource, /aria-hidden/);
 });
 
 test('表格尊重自身宽度、超出时横向滚动且不使用圆角', () => {

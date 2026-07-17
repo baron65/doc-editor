@@ -62,6 +62,7 @@
 - [ ] 阅读器复用共享语言规范化和高亮目录，未知语言保留原值并按纯文本渲染。
 - [ ] 使用自定义 `CodeBlockExtension` + React `CodeBlockNodeView`，保留 Tiptap `NodeViewContent` 编辑能力和 `language` 属性序列化。
 - [ ] 代码块顶部工具栏提供代码块标识、当前语言、语言搜索、自动换行和复制；菜单为 `contentEditable=false`，支持点击外部/Escape 关闭。
+- [ ] 新增共享行号展示：管理端 NodeView 与用户端 Reader 均按原始代码逻辑行（包含空行）生成连续行号；行号不持久化、不参与复制，自动换行后仍保持逻辑行编号。
 - [ ] 插入代码块默认使用 Plain Text，不再弹出输入语言对话框；选择语言通过 `updateAttributes({ language })` 回写并触发现有自动保存。
 - [ ] 自动换行只切换当前 NodeView 的展示类；关闭换行时正文区域横向滚动，不能撑破编辑器容器。
 - [ ] 复制完整代码文本并显示成功/失败反馈；工具栏操作不得改变正文、选区、撤销或重做。

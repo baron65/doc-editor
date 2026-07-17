@@ -6,6 +6,8 @@ import {
   findCodeLanguage,
   normalizeCodeLanguage,
 } from './codeLanguages';
+import { getCodeLineNumbers } from './codeLineNumbers';
+import { copyText } from '../copyText';
 
 type CopyState = 'idle' | 'copied' | 'failed';
 
@@ -18,6 +20,7 @@ export function CodeBlockNodeView({ node, updateAttributes }: ReactNodeViewProps
   const language = normalizeCodeLanguage(String(node.attrs.language ?? 'plaintext'));
   const languageMeta = findCodeLanguage(language);
   const options = useMemo(() => filterCodeLanguages(query), [query]);
+  const lineNumbers = getCodeLineNumbers(node.textContent);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -50,13 +53,7 @@ export function CodeBlockNodeView({ node, updateAttributes }: ReactNodeViewProps
   };
 
   const copy = async () => {
-    try {
-      if (!navigator.clipboard) throw new Error('clipboard unavailable');
-      await navigator.clipboard.writeText(node.textContent);
-      setCopyState('copied');
-    } catch {
-      setCopyState('failed');
-    }
+    setCopyState((await copyText(node.textContent)) ? 'copied' : 'failed');
     globalThis.setTimeout(() => setCopyState('idle'), 1600);
   };
 
@@ -133,16 +130,21 @@ export function CodeBlockNodeView({ node, updateAttributes }: ReactNodeViewProps
           </button>
         </div>
       </header>
-      <NodeViewContent
-        as="pre"
-        className="hljs code-block-editor-content m-0 bg-[#1e1e1e] p-4 text-sm leading-6 text-[#d4d4d4]"
-        spellCheck={false}
-        style={{
-          whiteSpace: wrap ? 'pre-wrap' : 'pre',
-          overflowWrap: wrap ? 'anywhere' : 'normal',
-          overflowX: wrap ? 'hidden' : 'auto',
-        }}
-      />
+      <div className="flex min-w-0 bg-[#1e1e1e]">
+        <ol aria-hidden="true" className="code-line-numbers m-0 list-none shrink-0 select-none border-r border-[#3c3c3c] bg-[#1e1e1e] py-4 pr-3 text-right text-sm leading-6 text-[#858585]">
+          {lineNumbers.map((lineNumber) => <li key={lineNumber}>{lineNumber}</li>)}
+        </ol>
+        <NodeViewContent
+          as="pre"
+          className="hljs code-block-editor-content m-0 min-w-0 flex-1 bg-[#1e1e1e] p-4 text-sm leading-6 text-[#d4d4d4]"
+          spellCheck={false}
+          style={{
+            whiteSpace: wrap ? 'pre-wrap' : 'pre',
+            overflowWrap: wrap ? 'anywhere' : 'normal',
+            overflowX: wrap ? 'hidden' : 'auto',
+          }}
+        />
+      </div>
     </NodeViewWrapper>
   );
 }
