@@ -128,17 +128,20 @@ test('行列导轨紧贴表格边线且表格外边线清晰', () => {
   assert.match(globalStyles, /\.document-body table\s*\{[^}]*border:\s*1px solid #d8dce5/);
 });
 
-test('横向滚动表格时左侧行导轨固定在滚动容器边界', () => {
+test('横向滚动表格时左侧行导轨贴合可见表格边界', () => {
   assert.match(toolbarSource, /const wrapperRect = elements\.wrapper\.getBoundingClientRect\(\)/);
-  assert.match(toolbarSource, /style=\{\{ left: wrapperRect\.left - railOffset, top: tableRect\.top, height: tableRect\.height \}\}/);
-  assert.match(toolbarSource, /style=\{\{ left: wrapperRect\.left - railOffset, top: boundary \}\}/);
-  assert.match(toolbarSource, /style=\{\{ left: wrapperRect\.left, top: boundary, width: wrapperRect\.width \}\}/);
+  assert.match(toolbarSource, /const visibleTableLeft = Math\.max\(tableRect\.left, wrapperRect\.left\)/);
+  assert.match(toolbarSource, /style=\{\{ left: visibleTableLeft - railOffset, top: tableRect\.top, height: tableRect\.height \}\}/);
+  assert.match(toolbarSource, /style=\{\{ left: visibleTableLeft - railOffset, top: boundary \}\}/);
+  assert.match(toolbarSource, /style=\{\{ left: visibleTableLeft, top: boundary, width: visibleTableWidth \}\}/);
 });
 
-test('横向滚动表格时顶部列导轨裁剪在滚动容器内', () => {
-  assert.match(toolbarSource, /style=\{\{ left: wrapperRect\.left, top: tableRect\.top - railOffset, width: wrapperRect\.width \}\}/);
-  assert.match(toolbarSource, /style=\{\{ left: column\.start - wrapperRect\.left, width: column\.size \}\}/);
-  assert.match(toolbarSource, /boundary < wrapperRect\.left \|\| boundary > wrapperRect\.right/);
+test('顶部列导轨宽度使用表格与滚动容器的可见交集', () => {
+  assert.match(toolbarSource, /const visibleTableRight = Math\.min\(tableRect\.right, wrapperRect\.right\)/);
+  assert.match(toolbarSource, /const visibleTableWidth = Math\.max\(0, visibleTableRight - visibleTableLeft\)/);
+  assert.match(toolbarSource, /style=\{\{ left: visibleTableLeft, top: tableRect\.top - railOffset, width: visibleTableWidth \}\}/);
+  assert.match(toolbarSource, /style=\{\{ left: column\.start - visibleTableLeft, width: column\.size \}\}/);
+  assert.match(toolbarSource, /boundary < visibleTableLeft \|\| boundary > visibleTableRight/);
   assert.match(globalStyles, /\.table-column-rail\s*\{[^}]*overflow:\s*hidden/);
 });
 

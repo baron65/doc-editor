@@ -137,6 +137,9 @@ export function TableContextToolbar({
   const columnActive = context.selectionKind === 'column';
   const tableActive = context.selectionKind === 'table';
   const cellRangeActive = context.selectionKind === 'cells';
+  const visibleTableLeft = Math.max(tableRect.left, wrapperRect.left);
+  const visibleTableRight = Math.min(tableRect.right, wrapperRect.right);
+  const visibleTableWidth = Math.max(0, visibleTableRight - visibleTableLeft);
   const showToolbar = rowActive || columnActive || cellRangeActive || tableActive;
   const deleteActionLabel = rowActive
     ? '删除所选行'
@@ -218,7 +221,7 @@ export function TableContextToolbar({
         aria-label="选择表格列"
         className="table-column-rail"
         data-table-context-control
-        style={{ left: wrapperRect.left, top: tableRect.top - railOffset, width: wrapperRect.width }}
+        style={{ left: visibleTableLeft, top: tableRect.top - railOffset, width: visibleTableWidth }}
       >
         {columns.map((column) => (
           <button
@@ -227,7 +230,7 @@ export function TableContextToolbar({
             aria-pressed={columnActive && context.columnIndex === column.index}
             className="table-column-rail-segment"
             type="button"
-            style={{ left: column.start - wrapperRect.left, width: column.size }}
+            style={{ left: column.start - visibleTableLeft, width: column.size }}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => chooseColumn(column.index)}
           />
@@ -238,7 +241,7 @@ export function TableContextToolbar({
         aria-label="选择表格行"
         className="table-row-rail"
         data-table-context-control
-        style={{ left: wrapperRect.left - railOffset, top: tableRect.top, height: tableRect.height }}
+        style={{ left: visibleTableLeft - railOffset, top: tableRect.top, height: tableRect.height }}
       >
         {rows.map((row) => (
           <button
@@ -262,17 +265,17 @@ export function TableContextToolbar({
           data-table-context-control
           data-tooltip="插入行"
           type="button"
-          style={{ left: wrapperRect.left - railOffset, top: boundary }}
+          style={{ left: visibleTableLeft - railOffset, top: boundary }}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => insertRowAt(index)}
         >
           <span aria-hidden>+</span>
-          <i className="table-insert-line is-row" style={{ left: wrapperRect.left, top: boundary, width: wrapperRect.width }} />
+          <i className="table-insert-line is-row" style={{ left: visibleTableLeft, top: boundary, width: visibleTableWidth }} />
         </button>
       ))}
 
       {getBoundaries(columns, tableRect.left, tableRect.right).map((boundary, index) => {
-        if (boundary < wrapperRect.left || boundary > wrapperRect.right) return null;
+        if (boundary < visibleTableLeft || boundary > visibleTableRight) return null;
         return (
           <button
             key={`column-boundary-${index}`}
