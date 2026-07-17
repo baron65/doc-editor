@@ -86,7 +86,7 @@ test('编辑器使用块级工具箱替代顶部内容工具栏', () => {
 });
 
 test('表格只使用表格专用句柄，不重复显示通用块句柄', () => {
-  assert.match(blockToolbarSource, /target\.type !== 'attachment' && target\.type !== 'table'/);
+  assert.match(blockToolbarSource, /target\.type !== 'attachment' && target\.type !== 'table' && target\.type !== 'mermaid'/);
 });
 
 test('块手柄按鼠标坐标命中当前块并使用单列工具箱', () => {
@@ -192,6 +192,11 @@ test('复制和删除节点以图标形式放在顶部紧凑工具区', () => {
   assert.match(blockToolbarSource, /<MenuButton compact icon=\{<BlockToolIcon type="copy" \/>\} label="复制节点"/);
   assert.match(blockToolbarSource, /<MenuButton compact icon=\{<BlockToolIcon type="delete" \/>\} label="删除节点"/);
   assert.doesNotMatch(blockToolbarSource, /<MenuGroup label="节点操作">/);
+});
+
+test('Mermaid 不复用通用块句柄的特化菜单', () => {
+  assert.doesNotMatch(blockToolbarSource, /isMermaidTarget/);
+  assert.doesNotMatch(blockToolbarSource, /Mermaid 块句柄菜单只保留节点操作/);
 });
 
 test('块菜单补齐任务清单、字号、下划线和删除线工具', () => {

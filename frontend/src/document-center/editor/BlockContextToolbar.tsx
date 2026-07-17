@@ -549,7 +549,7 @@ export function BlockContextToolbar({
           </button>
         </div>
       ) : null}
-      {target && presentation && target.type !== 'attachment' && target.type !== 'table' ? (
+      {target && presentation && target.type !== 'attachment' && target.type !== 'table' && target.type !== 'mermaid' ? (
         <div
           data-block-handle="true"
           className="absolute left-2 z-30"
