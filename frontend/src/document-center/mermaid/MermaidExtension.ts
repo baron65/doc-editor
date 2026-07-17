@@ -1,4 +1,6 @@
 import { mergeAttributes, Node } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import { MermaidNodeView } from './MermaidNodeView';
 
 export interface MermaidOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -69,5 +71,9 @@ export const MermaidExtension = Node.create<MermaidOptions>({
             attrs: { source },
           }),
     };
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(MermaidNodeView);
   },
 });

@@ -852,6 +852,27 @@ body {
   content: none;
 }
 
+.document-editor .mermaid-source-editor {
+  display: block;
+  width: 100%;
+  min-height: 10rem;
+  resize: vertical;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  padding: 0;
+  color: #4b5563;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  outline: none;
+}
+
+.document-editor .mermaid-source-editor:focus {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #93c5fd;
+}
+
 .mermaid-renderer svg {
   max-width: 100%;
   height: auto;
