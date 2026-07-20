@@ -1055,9 +1055,14 @@ function updateTextStyleMark(
         delete attrs[key];
       }
     });
+    const compactAttrs = Object.fromEntries(
+      Object.entries(attrs).filter(([, value]) => (
+        value !== null && value !== undefined && value !== ''
+      )),
+    );
     tr.removeMark(from, to, markType);
-    if (Object.keys(attrs).length) {
-      tr.addMark(from, to, markType.create(attrs));
+    if (Object.keys(compactAttrs).length) {
+      tr.addMark(from, to, markType.create(compactAttrs));
     }
     return true;
   });

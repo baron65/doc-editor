@@ -145,6 +145,12 @@ test('选中文本工具栏使用图标并提供文本和背景色工具', () =>
   assert.match(blockToolbarSource, /selection instanceof CellSelection/);
 });
 
+test('清除文字或背景颜色后不保留空 textStyle 标记', () => {
+  assert.match(blockToolbarSource, /const compactAttrs = Object\.fromEntries/);
+  assert.match(blockToolbarSource, /value !== null && value !== undefined && value !== ''/);
+  assert.match(blockToolbarSource, /markType\.create\(compactAttrs\)/);
+});
+
 test('非文本节点和代码块选区不展示文字格式工具栏', () => {
   assert.match(blockToolbarSource, /function isTextFormattingSelection/);
   assert.match(blockToolbarSource, /selection instanceof NodeSelection/);
