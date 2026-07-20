@@ -34,7 +34,9 @@ lowlight.register({
 
 export const CodeBlockExtension = CodeBlockLowlight.extend({
   addNodeView() {
-    return ReactNodeViewRenderer(CodeBlockNodeView);
+    return ReactNodeViewRenderer(CodeBlockNodeView, {
+      selectedOnTextSelection: true,
+    });
   },
 }).configure({
   defaultLanguage: 'plaintext',

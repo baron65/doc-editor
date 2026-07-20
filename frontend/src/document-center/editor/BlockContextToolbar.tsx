@@ -87,6 +87,14 @@ interface SelectionFormatMenuState {
   left: number;
 }
 
+const TEXT_FORMATTING_EXCLUDED_NODE_TYPES = new Set([
+  'attachment',
+  'codeBlock',
+  'horizontalRule',
+  'image',
+  'mermaid',
+]);
+
 export function BlockContextToolbar({
   editor,
   disabled,
@@ -115,10 +123,8 @@ export function BlockContextToolbar({
     }
     const updateSelectionMenu = () => {
       const selection = editor.state.selection;
-      const { from, to, empty } = selection;
-      const tableSelection = selection instanceof CellSelection
-        || (selection instanceof NodeSelection && selection.node.type.name === 'table');
-      if (empty || disabled || tableSelection) {
+      const { from, to } = selection;
+      if (!isTextFormattingSelection(editor) || disabled) {
         setSelectionMenu(undefined);
         setSelectionFormatMenu(undefined);
         return;
@@ -367,8 +373,8 @@ export function BlockContextToolbar({
     const blockRect = block.getBoundingClientRect();
     const { node } = blockTarget;
     const nextTarget = {
-      top: blockRect.top - wrapperRect.top + 2,
-      viewportTop: blockRect.top + 2,
+      top: blockRect.top - wrapperRect.top,
+      viewportTop: blockRect.top,
       pos: blockTarget.pos,
       end: blockTarget.end,
       insertionPos: blockTarget.insertionPos,
@@ -549,7 +555,13 @@ export function BlockContextToolbar({
           </button>
         </div>
       ) : null}
-      {target && presentation && target.type !== 'attachment' && target.type !== 'table' && target.type !== 'mermaid' ? (
+      {target
+        && presentation
+        && target.type !== 'attachment'
+        && target.type !== 'table'
+        && target.type !== 'mermaid'
+        && target.type !== 'codeBlock'
+        && target.type !== 'image' ? (
         <div
           data-block-handle="true"
           className="absolute left-2 z-30"
@@ -1054,6 +1066,31 @@ function updateTextStyleMark(
     return true;
   }
   return false;
+}
+
+function isTextFormattingSelection(editor: Editor) {
+  const selection = editor.state.selection;
+  if (
+    selection.empty
+    || selection instanceof NodeSelection
+    || selection instanceof CellSelection
+  ) {
+    return false;
+  }
+
+  let hasText = false;
+  let containsExcludedNode = false;
+  editor.state.doc.nodesBetween(selection.from, selection.to, (node) => {
+    if (TEXT_FORMATTING_EXCLUDED_NODE_TYPES.has(node.type.name)) {
+      containsExcludedNode = true;
+      return false;
+    }
+    if (node.isText) {
+      hasText = true;
+    }
+    return true;
+  });
+  return hasText && !containsExcludedNode;
 }
 
 function updateFormattableBlockAttributes(

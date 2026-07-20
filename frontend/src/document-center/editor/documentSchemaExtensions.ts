@@ -2,12 +2,14 @@ import Image from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import StarterKit from '@tiptap/starter-kit';
+import { ReactNodeViewRenderer } from '@tiptap/react';
 import { mergeAttributes } from '@tiptap/core';
 import { AttachmentExtension } from '../attachment/AttachmentExtension';
 import { CalloutExtension } from '../callout/CalloutExtension';
 import { MermaidExtension } from '../mermaid/MermaidExtension';
 import { CodeBlockExtension } from '../code/CodeBlockExtension';
 import { normalizeTextBackgroundColor } from '../content/blockFormatting';
+import { ImageNodeView } from '../image/ImageNodeView';
 
 const tableCellBackgroundAttribute = {
   default: null,
@@ -72,6 +74,9 @@ export function createDocumentSchemaExtensions() {
           ['img', mergeAttributes(this.options.HTMLAttributes, imageAttributes)],
           ...(node.attrs.caption ? [['figcaption', {}, String(node.attrs.caption)]] : []),
         ];
+      },
+      addNodeView() {
+        return ReactNodeViewRenderer(ImageNodeView);
       },
     }),
     Table.configure({

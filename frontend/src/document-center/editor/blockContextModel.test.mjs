@@ -104,6 +104,22 @@ test('列表中鼠标所在行解析为对应列表项而不是整个列表', ()
   assert.equal(textBlock?.node.textContent, '第二项');
 });
 
+test('列表缩进区域命中列表容器边界时仍解析为相邻列表项', () => {
+  const firstItem = schema.node('listItem', null, schema.node('paragraph', null, schema.text('第一项')));
+  const secondItem = schema.node('listItem', null, schema.node('paragraph', null, schema.text('第二项')));
+  const list = schema.node('bulletList', null, [firstItem, secondItem]);
+  const doc = schema.node('doc', null, list);
+  const secondItemStart = 1 + firstItem.nodeSize;
+
+  const target = resolveDocumentBlockTarget(doc, secondItemStart);
+
+  assert.equal(target?.pos, secondItemStart);
+  assert.equal(target?.end, secondItemStart + secondItem.nodeSize);
+  assert.equal(target?.presentationType, 'bulletList');
+  assert.equal(target?.node.type.name, 'listItem');
+  assert.equal(target?.node.textContent, '第二项');
+});
+
 test('普通段落自身就是可设置缩进和对齐的文本块', () => {
   const paragraph = schema.node('paragraph', null, schema.text('正文'));
   const doc = schema.node('doc', null, paragraph);

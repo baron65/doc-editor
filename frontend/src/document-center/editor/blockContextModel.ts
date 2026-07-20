@@ -78,6 +78,10 @@ export function resolveDocumentBlockTarget(
   if (resolved.depth >= 1) {
     const node = resolved.node(1);
     const blockPos = resolved.before(1);
+    const listItemTarget = resolveListContainerChildTarget(node, blockPos, resolved.parentOffset);
+    if (listItemTarget) {
+      return listItemTarget;
+    }
     const end = blockPos + node.nodeSize;
     return {
       pos: blockPos,
@@ -91,6 +95,10 @@ export function resolveDocumentBlockTarget(
 
   if (resolved.nodeAfter) {
     const node = resolved.nodeAfter;
+    const listItemTarget = resolveListContainerChildTarget(node, pos, 0);
+    if (listItemTarget) {
+      return listItemTarget;
+    }
     const end = pos + node.nodeSize;
     return {
       pos,
@@ -105,6 +113,10 @@ export function resolveDocumentBlockTarget(
   if (resolved.nodeBefore) {
     const node = resolved.nodeBefore;
     const blockPos = pos - node.nodeSize;
+    const listItemTarget = resolveListContainerChildTarget(node, blockPos, node.content.size);
+    if (listItemTarget) {
+      return listItemTarget;
+    }
     return {
       pos: blockPos,
       end: pos,
@@ -116,6 +128,41 @@ export function resolveDocumentBlockTarget(
   }
 
   return undefined;
+}
+
+function resolveListContainerChildTarget(
+  node: ProseMirrorNode,
+  nodePos: number,
+  offset: number,
+): DocumentBlockTarget | undefined {
+  if (!isListContainerNode(node)) {
+    return undefined;
+  }
+  const after = node.childAfter(offset);
+  const child = after.node
+    ? after
+    : node.childBefore(Math.max(0, offset));
+  if (!child.node || !isListItemNode(child.node)) {
+    return undefined;
+  }
+  const itemPos = nodePos + 1 + child.offset;
+  const end = itemPos + child.node.nodeSize;
+  return {
+    pos: itemPos,
+    end,
+    insertionPos: end - 1,
+    selectionPos: Math.min(itemPos + 1, Math.max(itemPos, end - 1)),
+    presentationType: node.type.name,
+    node: child.node,
+  };
+}
+
+function isListContainerNode(node: ProseMirrorNode) {
+  return ['bulletList', 'orderedList', 'taskList'].includes(node.type.name);
+}
+
+function isListItemNode(node: ProseMirrorNode) {
+  return ['listItem', 'taskItem'].includes(node.type.name);
 }
 
 export function getDocumentBlockTextRange(target?: DocumentBlockTarget) {

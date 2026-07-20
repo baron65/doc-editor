@@ -1,5 +1,6 @@
 import type { ReactNodeViewProps } from '@tiptap/react';
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react';
+import { DOMSerializer, type Node as ProseMirrorNode, type Schema } from '@tiptap/pm/model';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   filterCodeLanguages,
@@ -11,16 +12,31 @@ import { copyText } from '../copyText';
 
 type CopyState = 'idle' | 'copied' | 'failed';
 
-export function CodeBlockNodeView({ node, updateAttributes }: ReactNodeViewProps) {
+export function CodeBlockNodeView({
+  deleteNode,
+  editor,
+  getPos,
+  node,
+  selected,
+  updateAttributes,
+}: ReactNodeViewProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [nodeToolbarOpen, setNodeToolbarOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [wrap, setWrap] = useState(false);
   const [copyState, setCopyState] = useState<CopyState>('idle');
   const menuRef = useRef<HTMLDivElement>(null);
+  const closeNodeToolbarTimerRef = useRef<number>();
   const language = normalizeCodeLanguage(String(node.attrs.language ?? 'plaintext'));
   const languageMeta = findCodeLanguage(language);
   const options = useMemo(() => filterCodeLanguages(query), [query]);
   const lineNumbers = getCodeLineNumbers(node.textContent);
+
+  useEffect(() => {
+    if (!selected) {
+      setNodeToolbarOpen(false);
+    }
+  }, [selected]);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -57,12 +73,113 @@ export function CodeBlockNodeView({ node, updateAttributes }: ReactNodeViewProps
     globalThis.setTimeout(() => setCopyState('idle'), 1600);
   };
 
+  const cancelNodeToolbarClose = () => {
+    if (closeNodeToolbarTimerRef.current) {
+      window.clearTimeout(closeNodeToolbarTimerRef.current);
+      closeNodeToolbarTimerRef.current = undefined;
+    }
+  };
+
+  const scheduleNodeToolbarClose = () => {
+    cancelNodeToolbarClose();
+    closeNodeToolbarTimerRef.current = window.setTimeout(() => {
+      setNodeToolbarOpen(false);
+      closeNodeToolbarTimerRef.current = undefined;
+    }, 120);
+  };
+
+  const selectCodeBlockNode = () => {
+    const position = typeof getPos === 'function' ? getPos() : undefined;
+    if (typeof position === 'number') {
+      editor.chain().focus().setNodeSelection(position).run();
+    }
+  };
+
+  const copyCurrentNode = () => {
+    void copyCodeBlockNodeAsRichContent(node, editor.schema, node.textContent);
+  };
+
+  const deleteCurrentNode = () => {
+    setNodeToolbarOpen(false);
+    deleteNode();
+  };
+
   return (
     <NodeViewWrapper
       as="section"
-      className="code-block-editor my-5 overflow-visible rounded-lg border border-[#3c3c3c] bg-[#1e1e1e] [font-family:Consolas,'Courier_New',monospace]"
+      className={`code-block-editor my-5 overflow-visible rounded-lg border border-[#3c3c3c] bg-[#1e1e1e] [font-family:Consolas,'Courier_New',monospace] ${selected ? 'ring-2 ring-blue-200' : ''}`}
       data-code-language={language}
     >
+      {selected ? (
+        <div
+          className="code-block-node-side-handle"
+          contentEditable={false}
+          onPointerEnter={() => {
+            cancelNodeToolbarClose();
+            setNodeToolbarOpen(true);
+          }}
+          onMouseLeave={scheduleNodeToolbarClose}
+        >
+          <button
+            aria-label="代码块操作"
+            className="code-block-node-handle-button"
+            title="代码块操作"
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              selectCodeBlockNode();
+              setNodeToolbarOpen(true);
+            }}
+          >
+            <CodeBlockHandleIcon />
+          </button>
+          {nodeToolbarOpen ? (
+            <div
+              aria-label="代码块节点操作"
+              className="code-block-node-toolbar"
+              role="toolbar"
+              onMouseEnter={cancelNodeToolbarClose}
+              onMouseLeave={scheduleNodeToolbarClose}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            >
+              <button
+                aria-label="复制代码块节点"
+                className="code-block-node-toolbar-button"
+                title="复制代码块节点"
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  copyCurrentNode();
+                }}
+              >
+                <CodeBlockActionIcon type="copy" />
+              </button>
+              <button
+                aria-label="删除代码块节点"
+                className="code-block-node-toolbar-button code-block-node-toolbar-button-danger"
+                title="删除代码块节点"
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  deleteCurrentNode();
+                }}
+              >
+                <CodeBlockActionIcon type="delete" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <header
         className="relative flex items-center justify-between gap-3 rounded-t-lg border-b border-[#3c3c3c] bg-[#252526] px-3 py-2 text-xs text-[#cccccc]"
         contentEditable={false}
@@ -146,5 +263,61 @@ export function CodeBlockNodeView({ node, updateAttributes }: ReactNodeViewProps
         />
       </div>
     </NodeViewWrapper>
+  );
+}
+
+async function copyCodeBlockNodeAsRichContent(
+  node: ProseMirrorNode,
+  schema: Schema,
+  plainText: string,
+): Promise<void> {
+  const container = document.createElement('div');
+  container.appendChild(DOMSerializer.fromSchema(schema).serializeNode(node));
+  const html = container.innerHTML;
+
+  if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([plainText], { type: 'text/plain' }),
+        }),
+      ]);
+      return;
+    } catch {
+      // Fallback to the synchronous copy event below for restricted browsers.
+    }
+  }
+
+  const handleCopy = (event: ClipboardEvent) => {
+    event.preventDefault();
+    event.clipboardData?.setData('text/html', html);
+    event.clipboardData?.setData('text/plain', plainText);
+  };
+  document.addEventListener('copy', handleCopy, { once: true });
+  document.execCommand('copy');
+}
+
+function CodeBlockHandleIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+      <path d="m8 9-3 3 3 3M16 9l3 3-3 3M14 5l-4 14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CodeBlockActionIcon({ type }: { type: 'copy' | 'delete' }) {
+  if (type === 'delete') {
+    return (
+      <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+        <path d="M9 4h6m-9 4h12m-10 0 .7 11h6.6L16 8M10 11v5m4-5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+      <path d="M8 8h10v10H8V8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

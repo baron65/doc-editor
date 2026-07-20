@@ -20,6 +20,7 @@ import { TableContextToolbar } from './TableContextToolbar';
 import { useAppDialog } from '@/components/app-dialog/AppDialog';
 import { normalizeMermaidCodeBlocks } from '../content/mermaidContent';
 import { buildAssetUrl } from '../reader/assetPresentation';
+import { IMAGE_NODE_ACTION_EVENT, type ImageNodeActionDetail } from '../image/ImageNodeAction';
 
 interface DocumentEditorShellProps {
   document?: AdminDocumentDetail;
@@ -422,6 +423,30 @@ export const DocumentEditorShell = forwardRef<DocumentEditorShellHandle, Documen
       editor.chain().focus().updateAttributes('image', { [attribute]: next.trim() || null }).run();
     }
   };
+
+  useEffect(() => {
+    if (!editor) return undefined;
+    const handleImageNodeAction = (event: Event) => {
+      const detail = (event as CustomEvent<ImageNodeActionDetail>).detail;
+      if (!detail || typeof detail.position !== 'number') return;
+      if (detail.action === 'replace') {
+        imageActionRef.current = 'replace';
+        imageTargetPositionRef.current = detail.position;
+        editor.chain().focus().setNodeSelection(detail.position).run();
+        imageInputRef.current?.click();
+        return;
+      }
+      if (detail.action === 'alt') {
+        void editImageAttribute(detail.position, 'alt', '请输入图片替代文本');
+        return;
+      }
+      if (detail.action === 'caption') {
+        void editImageAttribute(detail.position, 'caption', '请输入图片说明');
+      }
+    };
+    editor.view.dom.addEventListener(IMAGE_NODE_ACTION_EVENT, handleImageNodeAction);
+    return () => editor.view.dom.removeEventListener(IMAGE_NODE_ACTION_EVENT, handleImageNodeAction);
+  }, [editor]);
 
   const handleAttachmentSelected = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

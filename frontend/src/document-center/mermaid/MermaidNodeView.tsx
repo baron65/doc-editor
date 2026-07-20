@@ -1,7 +1,7 @@
 import type { ReactNodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper } from '@tiptap/react';
 import { DOMSerializer, type Node as ProseMirrorNode, type Schema } from '@tiptap/pm/model';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const MAX_MERMAID_ROWS = 24;
 const MIN_MERMAID_ROWS = 6;
@@ -21,6 +21,12 @@ export function MermaidNodeView({
     MAX_MERMAID_ROWS,
     Math.max(MIN_MERMAID_ROWS, source.split(/\r?\n/).length + 1),
   );
+
+  useEffect(() => {
+    if (!selected) {
+      setToolbarOpen(false);
+    }
+  }, [selected]);
 
   const cancelClose = () => {
     if (closeTimerRef.current) {
@@ -59,74 +65,76 @@ export function MermaidNodeView({
       className={`mermaid-node group relative rounded-xl border bg-gray-50 p-4 ${selected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-gray-200'}`}
       data-type="mermaid"
     >
-      <div
-        className="mermaid-node-side-handle"
-        contentEditable={false}
-        onPointerEnter={() => {
-          cancelClose();
-          setToolbarOpen(true);
-        }}
-        onMouseLeave={scheduleClose}
-      >
-        <button
-          aria-label="Mermaid 操作"
-          className="mermaid-node-handle-button"
-          title="Mermaid 操作"
-          type="button"
-          onMouseDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            selectMermaidNode();
+      {selected ? (
+        <div
+          className="mermaid-node-side-handle"
+          contentEditable={false}
+          onPointerEnter={() => {
+            cancelClose();
             setToolbarOpen(true);
           }}
+          onMouseLeave={scheduleClose}
         >
-          <MermaidHandleIcon />
-        </button>
-        {toolbarOpen ? (
-          <div
-            aria-label="Mermaid 节点操作"
-            className="mermaid-node-toolbar"
-            role="toolbar"
-            onMouseEnter={cancelClose}
-            onMouseLeave={scheduleClose}
+          <button
+            aria-label="Mermaid 操作"
+            className="mermaid-node-handle-button"
+            title="Mermaid 操作"
+            type="button"
             onMouseDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
             }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              selectMermaidNode();
+              setToolbarOpen(true);
+            }}
           >
-            <button
-              aria-label="复制 Mermaid 节点"
-              className="mermaid-node-toolbar-button"
-              title="复制 Mermaid 节点"
-              type="button"
-              onClick={(event) => {
+            <MermaidHandleIcon />
+          </button>
+          {toolbarOpen ? (
+            <div
+              aria-label="Mermaid 节点操作"
+              className="mermaid-node-toolbar"
+              role="toolbar"
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
+              onMouseDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                copyCurrentNode();
               }}
             >
-              <MermaidActionIcon type="copy" />
-            </button>
-            <button
-              aria-label="删除 Mermaid 节点"
-              className="mermaid-node-toolbar-button mermaid-node-toolbar-button-danger"
-              title="删除 Mermaid 节点"
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                deleteCurrentNode();
-              }}
-            >
-              <MermaidActionIcon type="delete" />
-            </button>
-          </div>
-        ) : null}
-      </div>
+              <button
+                aria-label="复制 Mermaid 节点"
+                className="mermaid-node-toolbar-button"
+                title="复制 Mermaid 节点"
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  copyCurrentNode();
+                }}
+              >
+                <MermaidActionIcon type="copy" />
+              </button>
+              <button
+                aria-label="删除 Mermaid 节点"
+                className="mermaid-node-toolbar-button mermaid-node-toolbar-button-danger"
+                title="删除 Mermaid 节点"
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  deleteCurrentNode();
+                }}
+              >
+                <MermaidActionIcon type="delete" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <header className="mb-2 flex items-center justify-between gap-3" contentEditable={false}>
         <span className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400">Mermaid</span>
         <span className="text-xs text-gray-400">编辑源码后自动保存</span>

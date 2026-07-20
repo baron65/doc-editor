@@ -27,3 +27,8 @@ test('Mermaid 节点使用独立句柄和轻量操作气泡', () => {
   assert.match(globalStyles, /\.document-editor \.mermaid-node-side-handle/);
   assert.match(globalStyles, /\.document-editor \.mermaid-node-toolbar/);
 });
+
+test('Mermaid 句柄仅在节点选中时显示', () => {
+  assert.match(nodeViewSource, /selected \? \(\s*<div\s+className="mermaid-node-side-handle"/);
+  assert.match(nodeViewSource, /if \(!selected\) \{\s*setToolbarOpen\(false\)/);
+});

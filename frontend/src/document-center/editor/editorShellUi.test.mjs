@@ -85,8 +85,12 @@ test('编辑器使用块级工具箱替代顶部内容工具栏', () => {
   assert.match(blockToolbarSource, /aria-label="块工具箱"/);
 });
 
-test('表格只使用表格专用句柄，不重复显示通用块句柄', () => {
-  assert.match(blockToolbarSource, /target\.type !== 'attachment' && target\.type !== 'table' && target\.type !== 'mermaid'/);
+test('特殊节点只使用各自专用句柄，不重复显示通用块句柄', () => {
+  assert.match(blockToolbarSource, /target\.type !== 'attachment'/);
+  assert.match(blockToolbarSource, /target\.type !== 'table'/);
+  assert.match(blockToolbarSource, /target\.type !== 'mermaid'/);
+  assert.match(blockToolbarSource, /target\.type !== 'codeBlock'/);
+  assert.match(blockToolbarSource, /target\.type !== 'image'/);
 });
 
 test('块手柄按鼠标坐标命中当前块并使用单列工具箱', () => {
@@ -94,6 +98,13 @@ test('块手柄按鼠标坐标命中当前块并使用单列工具箱', () => {
   assert.match(blockToolbarSource, /target\.insertionPos/);
   assert.match(blockToolbarSource, /flex flex-col/);
   assert.doesNotMatch(blockToolbarSource, /grid grid-cols-3/);
+});
+
+test('通用块句柄与当前块顶部对齐，不额外下沉', () => {
+  assert.match(blockToolbarSource, /top: blockRect\.top - wrapperRect\.top,/);
+  assert.match(blockToolbarSource, /viewportTop: blockRect\.top,/);
+  assert.doesNotMatch(blockToolbarSource, /blockRect\.top - wrapperRect\.top \+ 2/);
+  assert.doesNotMatch(blockToolbarSource, /blockRect\.top \+ 2/);
 });
 
 test('块工具箱只展示 H1 到 H3，H4/H5 保留快捷键入口', () => {
@@ -132,7 +143,18 @@ test('选中文本工具栏使用图标并提供文本和背景色工具', () =>
   assert.match(blockToolbarSource, /SAFE_TEXT_BACKGROUND_COLORS/);
   assert.match(blockToolbarSource, /selectionFormatMenu/);
   assert.match(blockToolbarSource, /selection instanceof CellSelection/);
-  assert.match(blockToolbarSource, /selection\.node\.type\.name === 'table'/);
+});
+
+test('非文本节点和代码块选区不展示文字格式工具栏', () => {
+  assert.match(blockToolbarSource, /function isTextFormattingSelection/);
+  assert.match(blockToolbarSource, /selection instanceof NodeSelection/);
+  assert.match(blockToolbarSource, /selection instanceof CellSelection/);
+  assert.match(blockToolbarSource, /TEXT_FORMATTING_EXCLUDED_NODE_TYPES/);
+  assert.match(blockToolbarSource, /'codeBlock'/);
+  assert.match(blockToolbarSource, /'image'/);
+  assert.match(blockToolbarSource, /'attachment'/);
+  assert.match(blockToolbarSource, /'mermaid'/);
+  assert.match(blockToolbarSource, /if \(!isTextFormattingSelection\(editor\) \|\| disabled\)/);
 });
 
 test('鼠标进入手柄时临时高亮目标节点', () => {
