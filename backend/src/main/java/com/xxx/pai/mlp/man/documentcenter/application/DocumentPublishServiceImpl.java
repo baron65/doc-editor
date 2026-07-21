@@ -80,7 +80,8 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
         if (publishedRows != 1) {
             throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_VERSION_CONFLICT, "publication revision conflict");
         }
-        documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, REF_SCOPE_PUBLISHED);
+        documentAssetRefMapper.softDeleteByDocumentIdAndRefScope(
+                documentId, REF_SCOPE_PUBLISHED, SYSTEM_USER_ID, now);
         documentAssetRefMapper.copyDraftRefsToPublished(documentId);
 
         long treeRevision = bumpTreeRevision();
@@ -130,7 +131,8 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
         if (unpublishedRows != 1) {
             throw new DocumentBusinessException(DocumentErrorCode.DOCUMENT_PUBLICATION_CONFLICT, "publication version conflict");
         }
-        documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, REF_SCOPE_PUBLISHED);
+        documentAssetRefMapper.softDeleteByDocumentIdAndRefScope(
+                documentId, REF_SCOPE_PUBLISHED, SYSTEM_USER_ID, now);
 
         long treeRevision = bumpTreeRevision();
         DocumentOperationVO operation = DocumentOperationVO.empty();

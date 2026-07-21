@@ -220,7 +220,8 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
     }
 
     private void replaceDraftAssetRefs(Long documentId, Set<Long> draftAssetIds, LocalDateTime now) {
-        documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, REF_SCOPE_DRAFT);
+        documentAssetRefMapper.softDeleteByDocumentIdAndRefScope(
+                documentId, REF_SCOPE_DRAFT, SYSTEM_USER_ID, now);
         if (draftAssetIds.isEmpty()) {
             return;
         }

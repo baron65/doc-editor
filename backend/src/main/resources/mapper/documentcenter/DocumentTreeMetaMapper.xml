@@ -6,6 +6,7 @@
         SET tree_revision = tree_revision + 1,
             updated_at = #{updatedAt}
         WHERE meta_id = #{metaId}
+          AND is_deleted = 0
           AND tree_revision = #{expectedTreeRevision}
     </update>
 </mapper>

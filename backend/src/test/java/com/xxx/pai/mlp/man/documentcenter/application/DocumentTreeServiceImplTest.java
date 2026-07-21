@@ -177,6 +177,25 @@ class DocumentTreeServiceImplTest {
                 .hasMessageContaining("tree revision conflict");
     }
 
+    @Test
+    void deleteDraftDocumentSoftDeletesContentAndTreeNode() {
+        Long documentId = 900L;
+        DocumentNodePO node = documentNode(documentId, "待删除文档", null);
+        DocumentPO document = document(documentId, 1L, null, false);
+        when(documentTreeMetaMapper.selectById(1)).thenReturn(treeMeta(3L));
+        when(documentNodeMapper.selectById(documentId)).thenReturn(node);
+        when(documentMapper.selectById(documentId)).thenReturn(document);
+        when(documentMapper.softDeleteById(any(), any(), any())).thenReturn(1);
+        when(documentNodeMapper.softDeleteById(any(), any(), any())).thenReturn(1);
+        when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(1);
+
+        DocumentOperationVO result = service().deleteNode(documentId, 3L);
+
+        verify(documentMapper).softDeleteById(any(), any(), any());
+        verify(documentNodeMapper).softDeleteById(any(), any(), any());
+        assertThat(result.getTreeRevision()).isEqualTo("4");
+    }
+
     private static DocumentNodePO directory(Long id, Long parentId, String name) {
         DocumentNodePO node = new DocumentNodePO();
         node.setId(id);

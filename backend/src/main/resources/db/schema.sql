@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS doc_node (
     created_at          DATETIME     NOT NULL,
     updated_by          BIGINT       NOT NULL,
     updated_at          DATETIME     NOT NULL,
+    is_deleted          TINYINT      NOT NULL DEFAULT 0,
+    deletor_id          BIGINT       NULL,
+    delete_time         DATETIME     NULL,
     PRIMARY KEY (id),
     KEY idx_doc_node_parent_sort (parent_id, sort_order, id),
     UNIQUE KEY uk_doc_node_parent_draft_name (parent_id, draft_name_key),
@@ -32,6 +35,9 @@ CREATE TABLE IF NOT EXISTS doc_document (
     draft_updated_at         DATETIME NOT NULL,
     published_by             BIGINT   NULL,
     published_at             DATETIME NULL,
+    is_deleted               TINYINT  NOT NULL DEFAULT 0,
+    deletor_id               BIGINT   NULL,
+    delete_time              DATETIME NULL,
     PRIMARY KEY (document_id),
     KEY idx_doc_document_published (is_published, published_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -50,6 +56,9 @@ CREATE TABLE IF NOT EXISTS doc_asset (
     created_at      DATETIME     NOT NULL,
     updated_by      BIGINT       NOT NULL,
     updated_at      DATETIME     NOT NULL,
+    is_deleted      TINYINT      NOT NULL DEFAULT 0,
+    deletor_id      BIGINT       NULL,
+    delete_time     DATETIME     NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_doc_asset_storage_key (storage_key),
     KEY idx_doc_asset_document_status (document_id, status),
@@ -61,6 +70,9 @@ CREATE TABLE IF NOT EXISTS doc_asset_ref (
     asset_id    BIGINT      NOT NULL,
     ref_scope   VARCHAR(16) NOT NULL,
     created_at  DATETIME    NOT NULL,
+    is_deleted  TINYINT     NOT NULL DEFAULT 0,
+    deletor_id  BIGINT      NULL,
+    delete_time DATETIME    NULL,
     PRIMARY KEY (document_id, asset_id, ref_scope),
     KEY idx_doc_asset_ref_asset (asset_id, ref_scope)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -69,5 +81,8 @@ CREATE TABLE IF NOT EXISTS doc_tree_meta (
     meta_id       TINYINT  NOT NULL,
     tree_revision BIGINT   NOT NULL,
     updated_at    DATETIME NOT NULL,
+    is_deleted    TINYINT  NOT NULL DEFAULT 0,
+    deletor_id    BIGINT   NULL,
+    delete_time   DATETIME NULL,
     PRIMARY KEY (meta_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

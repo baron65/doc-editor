@@ -83,7 +83,8 @@ class DocumentDraftServiceImplTest {
         when(documentNodeMapper.updateById(any(DocumentNodePO.class))).thenReturn(1);
         when(documentMapper.updateDraftIfRevisionMatches(
                 any(), any(), any(), any(), any(), any())).thenReturn(1);
-        when(documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, "DRAFT")).thenReturn(0);
+        when(documentAssetRefMapper.softDeleteByDocumentIdAndRefScope(
+                any(), any(), any(), any())).thenReturn(0);
         when(documentAssetRefMapper.insertBatch(any())).thenReturn(2);
 
         DocumentDraftServiceImpl service = new DocumentDraftServiceImpl(
@@ -108,7 +109,8 @@ class DocumentDraftServiceImplTest {
         DocumentOperationVO operation = service.saveDraft(documentId, dto);
 
         ArgumentCaptor<List<DocumentAssetRefPO>> refsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(documentAssetRefMapper).deleteByDocumentIdAndRefScope(documentId, "DRAFT");
+        verify(documentAssetRefMapper).softDeleteByDocumentIdAndRefScope(
+                any(), any(), any(), any());
         verify(documentAssetRefMapper).insertBatch(refsCaptor.capture());
         assertThat(refsCaptor.getValue())
                 .extracting(DocumentAssetRefPO::getAssetId)

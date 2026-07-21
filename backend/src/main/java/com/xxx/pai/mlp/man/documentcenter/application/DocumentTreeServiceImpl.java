@@ -280,14 +280,18 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
             if (childCount > 0) {
                 throw new DocumentBusinessException(DocumentErrorCode.DIRECTORY_NOT_EMPTY, "directory is not empty");
             }
-            documentNodeMapper.deleteById(nodeId);
+            int deletedRows = documentNodeMapper.softDeleteById(nodeId, SYSTEM_USER_ID, LocalDateTime.now());
+            assertSoftDeleted(deletedRows);
         } else if (NODE_TYPE_DOCUMENT.equals(node.getNodeType())) {
             DocumentPO document = documentMapper.selectById(nodeId);
             if (document != null && Integer.valueOf(1).equals(document.getIsPublished())) {
                 throw new DocumentBusinessException(DocumentErrorCode.PUBLISHED_DOCUMENT_CANNOT_DELETE, "published document cannot be deleted");
             }
-            documentMapper.deleteById(nodeId);
-            documentNodeMapper.deleteById(nodeId);
+            LocalDateTime deleteTime = LocalDateTime.now();
+            int deletedDocumentRows = documentMapper.softDeleteById(nodeId, SYSTEM_USER_ID, deleteTime);
+            int deletedNodeRows = documentNodeMapper.softDeleteById(nodeId, SYSTEM_USER_ID, deleteTime);
+            assertSoftDeleted(deletedDocumentRows);
+            assertSoftDeleted(deletedNodeRows);
         } else {
             throw new DocumentBusinessException(DocumentErrorCode.INVALID_REQUEST, "unsupported node type");
         }
@@ -298,6 +302,14 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         operation.setTreeRevision(String.valueOf(newTreeRevision));
         operation.setPublishedNavigationChanged(publishedNavigationChanged);
         return operation;
+    }
+
+    private void assertSoftDeleted(int deletedRows) {
+        if (deletedRows != 1) {
+            throw new DocumentBusinessException(
+                    DocumentErrorCode.DOCUMENT_NOT_FOUND,
+                    "node was already deleted");
+        }
     }
 
     private List<DocumentNodePO> listAllNodes() {

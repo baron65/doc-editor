@@ -1,14 +1,17 @@
 package com.xxx.pai.mlp.man.documentcenter.domain.repository;
 
 import com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentAssetRefPO;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 public interface DocumentAssetRefMapper {
 
-    int deleteByDocumentIdAndRefScope(
+    int softDeleteByDocumentIdAndRefScope(
             @Param("documentId") Long documentId,
-            @Param("refScope") String refScope);
+            @Param("refScope") String refScope,
+            @Param("deletorId") Long deletorId,
+            @Param("deleteTime") LocalDateTime deleteTime);
 
     int insertBatch(@Param("refs") List<DocumentAssetRefPO> refs);
 

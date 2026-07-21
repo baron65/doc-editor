@@ -7,6 +7,11 @@ import org.apache.ibatis.annotations.Param;
 
 public interface DocumentMapper extends BaseMapper<DocumentPO> {
 
+    int softDeleteById(
+            @Param("documentId") Long documentId,
+            @Param("deletorId") Long deletorId,
+            @Param("deleteTime") LocalDateTime deleteTime);
+
     int updateDraftIfRevisionMatches(
             @Param("documentId") Long documentId,
             @Param("expectedDraftRevision") Long expectedDraftRevision,

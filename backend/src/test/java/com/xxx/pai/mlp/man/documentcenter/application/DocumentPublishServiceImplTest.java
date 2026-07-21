@@ -54,7 +54,8 @@ class DocumentPublishServiceImplTest {
         when(documentNodeMapper.updateById(any(DocumentNodePO.class))).thenReturn(1);
         when(documentMapper.publishIfRevisionsMatch(any(), any(), any(), any(), any())).thenReturn(1);
         when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(1);
-        when(documentAssetRefMapper.deleteByDocumentIdAndRefScope(documentId, "PUBLISHED")).thenReturn(0);
+        when(documentAssetRefMapper.softDeleteByDocumentIdAndRefScope(
+                any(), any(), any(), any())).thenReturn(0);
         when(documentAssetRefMapper.copyDraftRefsToPublished(documentId)).thenReturn(2);
 
         DocumentPublishServiceImpl service = new DocumentPublishServiceImpl(
@@ -70,7 +71,8 @@ class DocumentPublishServiceImplTest {
 
         DocumentOperationVO result = service.publish(documentId, dto);
 
-        verify(documentAssetRefMapper).deleteByDocumentIdAndRefScope(documentId, "PUBLISHED");
+        verify(documentAssetRefMapper).softDeleteByDocumentIdAndRefScope(
+                any(), any(), any(), any());
         verify(documentAssetRefMapper).copyDraftRefsToPublished(documentId);
         assertThat(result.getPublishState()).isEqualTo("PUBLISHED");
         assertThat(result.getPublicationVersion()).isEqualTo("1");
@@ -109,7 +111,8 @@ class DocumentPublishServiceImplTest {
         assertThat(result.getTreeRevision()).isEqualTo("22");
         assertThat(result.getPublishState()).isEqualTo("DRAFT");
         assertThat(result.getAlreadyUnpublished()).isFalse();
-        verify(documentAssetRefMapper).deleteByDocumentIdAndRefScope(documentId, "PUBLISHED");
+        verify(documentAssetRefMapper).softDeleteByDocumentIdAndRefScope(
+                any(), any(), any(), any());
     }
 
     @Test

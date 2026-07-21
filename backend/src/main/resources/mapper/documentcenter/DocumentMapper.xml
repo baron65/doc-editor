@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentMapper">
+    <update id="softDeleteById">
+        UPDATE doc_document
+        SET is_deleted = 1,
+            deletor_id = #{deletorId},
+            delete_time = #{deleteTime}
+        WHERE document_id = #{documentId}
+          AND is_deleted = 0
+    </update>
+
     <update id="updateDraftIfRevisionMatches">
         UPDATE doc_document
         SET draft_schema_version = #{schemaVersion},
@@ -9,6 +18,7 @@
             draft_updated_by = #{updatedBy},
             draft_updated_at = #{updatedAt}
         WHERE document_id = #{documentId}
+          AND is_deleted = 0
           AND draft_revision = #{expectedDraftRevision}
     </update>
 
@@ -22,6 +32,7 @@
             published_by = #{publishedBy},
             published_at = #{publishedAt}
         WHERE document_id = #{documentId}
+          AND is_deleted = 0
           AND draft_revision = #{expectedDraftRevision}
           AND publication_version = #{expectedPublicationVersion}
     </update>
@@ -34,6 +45,7 @@
             publication_version = publication_version + 1,
             is_published = 0
         WHERE document_id = #{documentId}
+          AND is_deleted = 0
           AND is_published = 1
           AND publication_version = #{expectedPublicationVersion}
     </update>
