@@ -74,6 +74,8 @@ mysql -h <host> -u <user> -p document_center \
   < backend/src/main/resources/db/migration/V2__document_center_logical_delete.sql
 mysql -h <host> -u <user> -p document_center \
   < backend/src/main/resources/db/migration/V3__document_center_audit_column_names.sql
+mysql -h <host> -u <user> -p document_center \
+  < backend/src/main/resources/db/migration/V4__document_center_auto_increment_ids.sql
 ```
 
 新建数据库无需单独执行迁移，`schema.sql` 已包含最新字段结构。

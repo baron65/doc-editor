@@ -18,7 +18,6 @@ import com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentTreeMetaPO;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentNodeMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentTreeMetaMapper;
-import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentIdGenerator;
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentJsonUtils;
 import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentBusinessException;
 import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentErrorCode;
@@ -40,9 +39,6 @@ class DocumentTreeServiceImplTest {
 
     @Mock
     private DocumentTreeMetaMapper documentTreeMetaMapper;
-
-    @Mock
-    private DocumentIdGenerator documentIdGenerator;
 
     @Test
     void adminTreeExposesDraftPublishedAndPendingUpdateStates() {
@@ -94,10 +90,14 @@ class DocumentTreeServiceImplTest {
         when(documentNodeMapper.selectById(fourthLevelId)).thenReturn(directory(fourthLevelId, thirdLevelId, "四级"));
         when(documentNodeMapper.selectCount(any())).thenReturn(0L);
         when(documentNodeMapper.selectList(any())).thenReturn(Collections.emptyList());
-        when(documentNodeMapper.insert(any(DocumentNodePO.class))).thenReturn(1);
+        when(documentNodeMapper.insert(any(DocumentNodePO.class))).thenAnswer(invocation -> {
+            DocumentNodePO node = invocation.getArgument(0);
+            assertThat(node.getId()).isNull();
+            node.setId(documentId);
+            return 1;
+        });
         when(documentMapper.insert(any(DocumentPO.class))).thenReturn(1);
         when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(1);
-        when(documentIdGenerator.nextId()).thenReturn(documentId);
 
         DocumentTreeServiceImpl service = new DocumentTreeServiceImpl(
                 documentNodeMapper,
@@ -105,8 +105,7 @@ class DocumentTreeServiceImplTest {
                 documentTreeMetaMapper,
                 new DocumentTreeAbility(),
                 new DocumentNameAbility(),
-                new DocumentJsonUtils(new ObjectMapper()),
-                documentIdGenerator);
+                new DocumentJsonUtils(new ObjectMapper()));
         DocumentDTO dto = new DocumentDTO();
         dto.setParentId(fourthLevelId);
         dto.setTitle("部署说明");
@@ -127,10 +126,14 @@ class DocumentTreeServiceImplTest {
         when(documentTreeMetaMapper.selectById(1)).thenReturn(treeMeta(3L));
         when(documentNodeMapper.selectCount(any())).thenReturn(0L);
         when(documentNodeMapper.selectList(any())).thenReturn(List.of(existing));
-        when(documentNodeMapper.insert(any(DocumentNodePO.class))).thenReturn(1);
+        when(documentNodeMapper.insert(any(DocumentNodePO.class))).thenAnswer(invocation -> {
+            DocumentNodePO node = invocation.getArgument(0);
+            assertThat(node.getId()).isNull();
+            node.setId(documentId);
+            return 1;
+        });
         when(documentMapper.insert(any(DocumentPO.class))).thenReturn(1);
         when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(1);
-        when(documentIdGenerator.nextId()).thenReturn(documentId);
 
         DocumentDTO dto = new DocumentDTO();
         dto.setParentId(0L);
@@ -152,10 +155,14 @@ class DocumentTreeServiceImplTest {
         when(documentNodeMapper.selectById(parentId)).thenReturn(directory(parentId, 0L, "目录"));
         when(documentNodeMapper.selectCount(any())).thenReturn(0L);
         when(documentNodeMapper.selectList(any())).thenReturn(Collections.emptyList());
-        when(documentNodeMapper.insert(any(DocumentNodePO.class))).thenReturn(1);
+        when(documentNodeMapper.insert(any(DocumentNodePO.class))).thenAnswer(invocation -> {
+            DocumentNodePO node = invocation.getArgument(0);
+            assertThat(node.getId()).isNull();
+            node.setId(documentId);
+            return 1;
+        });
         when(documentMapper.insert(any(DocumentPO.class))).thenReturn(1);
         when(documentTreeMetaMapper.incrementRevisionIfMatches(any(), any(), any())).thenReturn(0);
-        when(documentIdGenerator.nextId()).thenReturn(documentId);
 
         DocumentTreeServiceImpl service = new DocumentTreeServiceImpl(
                 documentNodeMapper,
@@ -163,8 +170,7 @@ class DocumentTreeServiceImplTest {
                 documentTreeMetaMapper,
                 new DocumentTreeAbility(),
                 new DocumentNameAbility(),
-                new DocumentJsonUtils(new ObjectMapper()),
-                documentIdGenerator);
+                new DocumentJsonUtils(new ObjectMapper()));
         DocumentDTO dto = new DocumentDTO();
         dto.setParentId(parentId);
         dto.setTitle("并发文档");
@@ -240,8 +246,7 @@ class DocumentTreeServiceImplTest {
                 documentTreeMetaMapper,
                 new DocumentTreeAbility(),
                 new DocumentNameAbility(),
-                new DocumentJsonUtils(new ObjectMapper()),
-                documentIdGenerator);
+                new DocumentJsonUtils(new ObjectMapper()));
     }
 
     private static DocumentTreeMetaPO treeMeta(Long treeRevision) {

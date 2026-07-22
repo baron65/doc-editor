@@ -17,14 +17,12 @@ import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentNodeMapper;
 import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentTreeMetaMapper;
 import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentBusinessException;
 import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentErrorCode;
-import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentIdGenerator;
 import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentJsonUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,7 +50,6 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
     private final DocumentTreeAbility documentTreeAbility;
     private final DocumentNameAbility documentNameAbility;
     private final DocumentJsonUtils documentJsonUtils;
-    private final DocumentIdGenerator documentIdGenerator;
 
     public DocumentTreeServiceImpl(
             DocumentNodeMapper documentNodeMapper,
@@ -60,15 +57,13 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
             DocumentTreeMetaMapper documentTreeMetaMapper,
             DocumentTreeAbility documentTreeAbility,
             DocumentNameAbility documentNameAbility,
-            DocumentJsonUtils documentJsonUtils,
-            DocumentIdGenerator documentIdGenerator) {
+            DocumentJsonUtils documentJsonUtils) {
         this.documentNodeMapper = documentNodeMapper;
         this.documentMapper = documentMapper;
         this.documentTreeMetaMapper = documentTreeMetaMapper;
         this.documentTreeAbility = documentTreeAbility;
         this.documentNameAbility = documentNameAbility;
         this.documentJsonUtils = documentJsonUtils;
-        this.documentIdGenerator = documentIdGenerator;
     }
 
     @Override
@@ -113,10 +108,8 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         ensureDraftNameUnique(dto.getParentId(), normalizedName, null);
         ensurePublishedNameUnique(dto.getParentId(), normalizedName, null);
 
-        long nodeId = documentIdGenerator.nextId();
         LocalDateTime now = LocalDateTime.now();
         DocumentNodePO node = new DocumentNodePO();
-        node.setId(nodeId);
         node.setParentId(dto.getParentId());
         node.setNodeType(NODE_TYPE_DIRECTORY);
         node.setDraftName(dto.getName().trim());
@@ -130,6 +123,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         node.setUpdatorId(SYSTEM_USER_ID);
         node.setUpdateTime(now);
         documentNodeMapper.insert(node);
+        long nodeId = requireGeneratedId(node.getId());
         reorderNewNode(node, dto.getTargetIndex(), now);
 
         long newTreeRevision = bumpTreeRevision(treeMeta);
@@ -150,11 +144,9 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         assertDocumentParentDepthAllowed(parentNode);
         ensureDraftNameUnique(dto.getParentId(), normalizedTitle, null);
 
-        long documentId = documentIdGenerator.nextId();
         LocalDateTime now = LocalDateTime.now();
 
         DocumentNodePO node = new DocumentNodePO();
-        node.setId(documentId);
         node.setParentId(dto.getParentId());
         node.setNodeType(NODE_TYPE_DOCUMENT);
         node.setDraftName(dto.getTitle().trim());
@@ -168,6 +160,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         node.setUpdatorId(SYSTEM_USER_ID);
         node.setUpdateTime(now);
         documentNodeMapper.insert(node);
+        long documentId = requireGeneratedId(node.getId());
         reorderNewNode(node, dto.getTargetIndex(), now);
 
         DocumentPO document = new DocumentPO();
@@ -193,6 +186,13 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         operation.setDraftRevision(String.valueOf(document.getDraftRevision()));
         operation.setTreeRevision(String.valueOf(newTreeRevision));
         return operation;
+    }
+
+    private long requireGeneratedId(Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalStateException("database did not return generated document node id");
+        }
+        return id;
     }
 
     @Override

@@ -66,9 +66,9 @@
 - 重复取消发布在文档已是草稿态时返回成功语义 `alreadyUnpublished=true`。
 - 目录最大四层只计算目录层级；第四层目录下允许放文档。
 
-当前后端仍是参考工程级实现，迁移企业仓库时需要替换：
+当前后端仍是参考工程级实现，迁移企业仓库时需要验证或替换：
 
-- 企业统一 ID 生成器；
+- 企业 MySQL/OceanBase 的 BIGINT 自增、JDBC generated keys 和迁移后自增起点；
 - 企业统一认证、用户 ID、审计字段；
 - 企业统一错误码、异常映射和 `CommonResponse<T>` 字段；
 - 企业对象存储 adapter；

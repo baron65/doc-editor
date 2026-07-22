@@ -12,7 +12,6 @@ import com.xxx.pai.mlp.man.documentcenter.infra.exception.DocumentErrorCode;
 import com.xxx.pai.mlp.man.documentcenter.infra.storage.DocumentObjectStorage;
 import com.xxx.pai.mlp.man.documentcenter.infra.storage.ObjectStream;
 import com.xxx.pai.mlp.man.documentcenter.infra.storage.StoredObject;
-import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentIdGenerator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -36,19 +35,16 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
     private final DocumentAssetMapper documentAssetMapper;
     private final DocumentAssetRefMapper documentAssetRefMapper;
     private final DocumentAssetAbility documentAssetAbility;
-    private final DocumentIdGenerator documentIdGenerator;
 
     public DocumentAssetServiceImpl(
             DocumentObjectStorage objectStorage,
             DocumentAssetMapper documentAssetMapper,
             DocumentAssetRefMapper documentAssetRefMapper,
-            DocumentAssetAbility documentAssetAbility,
-            DocumentIdGenerator documentIdGenerator) {
+            DocumentAssetAbility documentAssetAbility) {
         this.objectStorage = objectStorage;
         this.documentAssetMapper = documentAssetMapper;
         this.documentAssetRefMapper = documentAssetRefMapper;
         this.documentAssetAbility = documentAssetAbility;
-        this.documentIdGenerator = documentIdGenerator;
     }
 
     @Override
@@ -64,8 +60,7 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         if (!documentAssetAbility.isAllowedType(assetKind, originalName, contentType, readSignature(file))) {
             throw new DocumentBusinessException(DocumentErrorCode.UNSUPPORTED_FILE_TYPE, "unsupported file extension, mime type or signature");
         }
-        Long assetId = documentIdGenerator.nextId();
-        String storageKey = "documents/" + dto.getDocumentId() + "/assets/" + assetId + "/" + UUID.randomUUID();
+        String storageKey = "documents/" + dto.getDocumentId() + "/assets/" + UUID.randomUUID();
         StoredObject storedObject = objectStorage.put(
                 storageKey,
                 file.getInputStream(),
@@ -74,7 +69,6 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         );
         LocalDateTime now = LocalDateTime.now();
         DocumentAssetPO assetPO = new DocumentAssetPO();
-        assetPO.setId(assetId);
         assetPO.setDocumentId(dto.getDocumentId());
         assetPO.setAssetKind(assetKind);
         assetPO.setStatus(ASSET_STATUS_READY);
@@ -88,6 +82,7 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         assetPO.setUpdatorId(SYSTEM_USER_ID);
         assetPO.setUpdateTime(now);
         documentAssetMapper.insert(assetPO);
+        Long assetId = requireGeneratedId(assetPO.getId());
 
         DocumentAssetVO asset = new DocumentAssetVO();
         asset.setAssetId(String.valueOf(assetId));
@@ -98,6 +93,13 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         asset.setSizeBytes(String.valueOf(storedObject.getSizeBytes()));
         asset.setAccessUrl("/api/v1/document-center/admin/documents/" + dto.getDocumentId() + "/assets/" + assetId);
         return asset;
+    }
+
+    private Long requireGeneratedId(Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalStateException("database did not return generated asset id");
+        }
+        return id;
     }
 
     @Override

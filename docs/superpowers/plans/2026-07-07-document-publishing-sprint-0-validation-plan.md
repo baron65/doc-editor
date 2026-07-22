@@ -398,11 +398,11 @@ git commit -m "docs: record storage baseline validation"
 **Files:**
 
 - Modify: `docs/superpowers/reports/2026-07-07-document-publishing-sprint-0-validation-report.md`
-- Read: 参考工程 Controller、异常处理、权限占位、审计字段和 ID 生成器代码
+- Read: 参考工程 Controller、异常处理、权限占位、审计字段和数据库自增主键配置
 
 **Interfaces:**
 
-- Consumes: 独立工程内的 `CommonResponse<T>`、异常映射、登录用户占位、审计字段和 ID 生成器；迁移时替换为企业平台真实实现。
+- Consumes: 独立工程内的 `CommonResponse<T>`、异常映射、登录用户占位、审计字段和数据库自增主键约定；迁移时验证企业数据库兼容性。
 - Produces: 文档中心 Controller、DTO、异常码、审计字段的接入约定。
 
 - [ ] **Step 1: 定位统一响应和异常映射**
@@ -439,12 +439,12 @@ Expected:
 Run:
 
 ```bash
-rg -n 'IdGenerator|Snowflake|nextId|creatorId|createTime|updatorId|updateTime|MetaObjectHandler|Auditor' .
+rg -n 'AUTO_INCREMENT|IdType.AUTO|useGeneratedKeys|keyProperty|creatorId|createTime|updatorId|updateTime|MetaObjectHandler|Auditor' .
 ```
 
 Expected:
 
-- 明确 BIGINT ID 来源。
+- 明确 `doc_node.id`、`doc_asset.id` 由数据库自增生成，关联表复用回填主键。
 - 明确前端必须把 BIGINT 序列化为字符串。
 - 明确审计字段由基类、MyBatis handler、应用服务还是数据库填充。
 

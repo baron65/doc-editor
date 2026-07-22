@@ -1,7 +1,7 @@
 # AI Infra 文档发布中心前后端详细技术设计
 
 > 日期：2026-07-06
-> 最近同步：2026-07-22（以 `backend/src/main/resources/db/schema.sql`、V2/V3 迁移脚本和当前 PO/Mapper 为准）
+> 最近同步：2026-07-22（以 `backend/src/main/resources/db/schema.sql`、V2/V3/V4 迁移脚本和当前 PO/Mapper 为准）
 > 状态：已完成数据库字段、逻辑删除、索引及用户端导出能力同步
 > 依据：[产品设计](./2026-06-30-document-publishing-center-design.md)与[前后端技术调研](./2026-07-01-document-publishing-technical-research.md)
 > 适用技术栈：Java 11、Spring Boot 2.3.12.RELEASE、MyBatis-Plus 3.5.1、MySQL/OceanBase MySQL 模式、`@umijs/max@4.5.3`、TypeScript 4.9.5、Tailwind CSS 3.4.17、Tiptap 3
@@ -146,7 +146,7 @@ flowchart LR
 
 ### 4.1 通用约定
 
-- 主键类型使用 `BIGINT`，值由现有系统 ID 生成器生成；不依赖数据库自增。
+- `doc_node.id` 和 `doc_asset.id` 使用数据库 `BIGINT AUTO_INCREMENT`；`doc_document.document_id` 复用插入 `doc_node` 后回填的主键，`doc_tree_meta.meta_id` 使用固定输入值。MyBatis-Plus 实体分别使用 `IdType.AUTO` 和 `IdType.INPUT`，应用层不再生成业务主键。
 - 虚拟根节点使用 `parent_id = 0`，数据库中不插入根节点记录。
 - 表名以 `doc_` 为逻辑前缀；若现有系统有统一前缀，实施时整体替换。
 - 默认不建立物理外键，避免与既有分库、迁移和删除约定冲突；所有关联完整性由服务层和集成测试保证。
@@ -166,7 +166,7 @@ delete_time DATETIME NULL
 
 所有查询、更新、资源引用统计和树构建默认附带 `is_deleted = 0`。删除操作只更新上述字段，不执行物理 `DELETE`；资源对象的物理清理由资源清理任务在确认没有 DRAFT/PUBLISHED 引用后执行。
 
-当前 `schema.sql` 是新环境基线，已有环境按 `V2__document_center_logical_delete.sql` 和 `V3__document_center_audit_column_names.sql` 顺序迁移。V2 针对旧审计字段执行，不能在已经完成 V3 的数据库上重复执行。
+当前 `schema.sql` 是新环境基线，已有环境按 `V2__document_center_logical_delete.sql`、`V3__document_center_audit_column_names.sql`、`V4__document_center_auto_increment_ids.sql` 顺序迁移。V2 针对旧审计字段执行，不能在已经完成 V3 的数据库上重复执行；V4 会保留现有 ID，并由数据库从各表当前最大主键之后继续分配。
 
 ### 4.2 ER 图
 
@@ -237,7 +237,7 @@ erDiagram
 
 ```sql
 CREATE TABLE doc_node (
-    id                  BIGINT       NOT NULL COMMENT '节点ID，文档稳定URL使用该值',
+    id                  BIGINT       NOT NULL AUTO_INCREMENT COMMENT '节点ID，文档稳定URL使用该值',
     parent_id           BIGINT       NOT NULL DEFAULT 0 COMMENT '父节点ID，0表示虚拟根',
     node_type           VARCHAR(16)  NOT NULL COMMENT 'DIRECTORY或DOCUMENT',
     draft_name          VARCHAR(200) NOT NULL COMMENT '管理端名称/编辑稿标题',
@@ -318,7 +318,7 @@ is_published = 1 AND draft_revision <> published_revision
 
 ```sql
 CREATE TABLE doc_asset (
-    id               BIGINT        NOT NULL,
+    id               BIGINT        NOT NULL AUTO_INCREMENT,
     document_id      BIGINT        NOT NULL,
     asset_kind       VARCHAR(16)   NOT NULL COMMENT 'IMAGE或ATTACHMENT',
     status           VARCHAR(16)   NOT NULL COMMENT 'UPLOADING/READY/FAILED/DELETING',
@@ -2291,7 +2291,7 @@ Spike 不通过时优先调整精确依赖版本或 Markdown 适配器；只有 
 ### 21.1 上线前置检查
 
 1. 确认目标数据库类型、版本、字符集和迁移工具。
-2. 确认平台 ID 生成、审计字段、权限注解、`CommonResponse<T>` 与异常映射。
+2. 确认目标数据库自增主键、审计字段、权限注解、`CommonResponse<T>` 与异常映射。
 3. 完成存储适配器上传、读取、删除、超时和安全扫描验证。
 4. 调整应用、网关和反向代理 multipart 上限。
 5. 确认 Surefire/CI 实际执行测试。
@@ -2351,7 +2351,7 @@ Spike 不通过时优先调整精确依赖版本或 Markdown 适配器；只有 
 | 根包与 Maven 模块 | `com.xxx.pai.mlp.man.documentcenter`，独立工程先按目标分层组织 | 按企业仓库真实 `{module}` 名和 `client/application/domain/infra` 分包调整 |
 | 响应包裹 | 自定义 `CommonResponse<T>`，字段尽量贴近企业系统 | 复用企业真实字段、错误码和 `@ControllerAdvice` 映射 |
 | 权限 | 只做登录用户和后台写接口保护占位，不做文档级权限 | 替换为实际注解、权限码和菜单配置 |
-| ID | 参考工程 BIGINT/Snowflake 生成器 | 切换企业 ID 生成器，并保持前端字符串序列化策略 |
+| ID | `doc_node.id`、`doc_asset.id` 使用数据库 BIGINT 自增；关联表复用已回填主键 | 验证企业 MySQL/OceanBase 的自增主键、JDBC generated keys 和迁移后自增起点；前端继续按字符串序列化 |
 | 审计字段 | BIGINT 用户 ID + DATETIME + 用户上下文占位 | 继承实际审计基类、MetaObjectHandler 或用户上下文 |
 | 数据库 | MySQL 8.0 优先，DDL 保持 OceanBase MySQL 模式兼容 | 用企业实际版本验证索引、事务和字符集 |
 | 存储 | `DocumentObjectStorage` 抽象 + MinIO S3 adapter | 替换为 `platform-support-storage-v2` adapter 并做故障测试 |

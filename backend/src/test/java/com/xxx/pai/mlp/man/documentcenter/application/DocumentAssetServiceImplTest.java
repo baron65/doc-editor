@@ -16,7 +16,6 @@ import com.xxx.pai.mlp.man.documentcenter.domain.repository.DocumentAssetRefMapp
 import com.xxx.pai.mlp.man.documentcenter.infra.storage.DocumentObjectStorage;
 import com.xxx.pai.mlp.man.documentcenter.infra.storage.ObjectStream;
 import com.xxx.pai.mlp.man.documentcenter.infra.storage.StoredObject;
-import com.xxx.pai.mlp.man.documentcenter.infra.util.DocumentIdGenerator;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import org.junit.jupiter.api.Test;
@@ -38,9 +37,6 @@ class DocumentAssetServiceImplTest {
     @Mock
     private DocumentAssetRefMapper documentAssetRefMapper;
 
-    @Mock
-    private DocumentIdGenerator documentIdGenerator;
-
     @Test
     void uploadStoresObjectAndPersistsReadyAssetMetadata() throws Exception {
         Long assetId = 800L;
@@ -50,21 +46,24 @@ class DocumentAssetServiceImplTest {
                 "architecture.png",
                 "image/png",
                 new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01});
-        when(documentIdGenerator.nextId()).thenReturn(assetId);
         when(objectStorage.put(any(String.class), any(InputStream.class), eq(file.getSize()), eq("image/png")))
                 .thenAnswer(invocation -> new StoredObject(
                         invocation.getArgument(0),
                         file.getSize(),
                         "image/png",
                         "/api/v1/document-center/assets/" + assetId));
-        when(documentAssetMapper.insert(any(DocumentAssetPO.class))).thenReturn(1);
+        when(documentAssetMapper.insert(any(DocumentAssetPO.class))).thenAnswer(invocation -> {
+            DocumentAssetPO asset = invocation.getArgument(0);
+            assertThat(asset.getId()).isNull();
+            asset.setId(assetId);
+            return 1;
+        });
 
         DocumentAssetServiceImpl service = new DocumentAssetServiceImpl(
                 objectStorage,
                 documentAssetMapper,
                 documentAssetRefMapper,
-                new DocumentAssetAbility(),
-                documentIdGenerator);
+                new DocumentAssetAbility());
         DocumentAssetDTO dto = new DocumentAssetDTO();
         dto.setDocumentId(documentId);
         dto.setAssetKind("IMAGE");
@@ -78,7 +77,7 @@ class DocumentAssetServiceImplTest {
         assertThat(persistedAsset.getDocumentId()).isEqualTo(documentId);
         assertThat(persistedAsset.getAssetKind()).isEqualTo("IMAGE");
         assertThat(persistedAsset.getStatus()).isEqualTo("READY");
-        assertThat(persistedAsset.getStorageKey()).contains(String.valueOf(documentId), String.valueOf(assetId));
+        assertThat(persistedAsset.getStorageKey()).contains(String.valueOf(documentId));
         assertThat(persistedAsset.getOriginalName()).isEqualTo("architecture.png");
         assertThat(persistedAsset.getFileExtension()).isEqualTo("png");
         assertThat(persistedAsset.getMimeType()).isEqualTo("image/png");
@@ -103,8 +102,7 @@ class DocumentAssetServiceImplTest {
                 objectStorage,
                 documentAssetMapper,
                 documentAssetRefMapper,
-                new DocumentAssetAbility(),
-                documentIdGenerator);
+                new DocumentAssetAbility());
 
         DocumentAssetDownloadBO download = service.openAdminAsset(documentId, assetId);
 
@@ -131,8 +129,7 @@ class DocumentAssetServiceImplTest {
                 objectStorage,
                 documentAssetMapper,
                 documentAssetRefMapper,
-                new DocumentAssetAbility(),
-                documentIdGenerator);
+                new DocumentAssetAbility());
 
         DocumentAssetDownloadBO download = service.openPublishedAsset(documentId, assetId);
 

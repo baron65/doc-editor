@@ -1,6 +1,7 @@
 package com.xxx.pai.mlp.man.documentcenter.domain.po;
 
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
@@ -8,7 +9,7 @@ import java.time.LocalDateTime;
 @TableName("doc_tree_meta")
 public class DocumentTreeMetaPO {
 
-    @TableId
+    @TableId(type = IdType.INPUT)
     private Integer metaId;
     private Long treeRevision;
     private LocalDateTime updateTime;

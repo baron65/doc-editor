@@ -2,6 +2,8 @@ package com.xxx.pai.mlp.man.documentcenter.infra.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentAssetPO;
 import com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentAssetRefPO;
@@ -68,6 +70,24 @@ class LogicalDeletePersistenceContractTest {
             assertThat(poClass.getDeclaredField("deletorId")).isNotNull();
             assertThat(poClass.getDeclaredField("deleteTime")).isNotNull();
         }
+    }
+
+    @Test
+    void generatedPrimaryKeysUseDatabaseAutoIncrementAndMapperBackfill() throws Exception {
+        assertThat(DocumentNodePO.class.getDeclaredField("id").getAnnotation(TableId.class).type())
+                .isEqualTo(IdType.AUTO);
+        assertThat(DocumentAssetPO.class.getDeclaredField("id").getAnnotation(TableId.class).type())
+                .isEqualTo(IdType.AUTO);
+        assertThat(DocumentPO.class.getDeclaredField("documentId").getAnnotation(TableId.class).type())
+                .isEqualTo(IdType.INPUT);
+        assertThat(DocumentTreeMetaPO.class.getDeclaredField("metaId").getAnnotation(TableId.class).type())
+                .isEqualTo(IdType.INPUT);
+
+        String schema = readClasspathResource("db/schema.sql");
+        String migration = readClasspathResource("db/migration/V4__document_center_auto_increment_ids.sql");
+
+        assertThat(countOccurrences(schema, "BIGINT       NOT NULL AUTO_INCREMENT")).isEqualTo(2);
+        assertThat(countOccurrences(migration, "BIGINT NOT NULL AUTO_INCREMENT")).isEqualTo(2);
     }
 
     @Test

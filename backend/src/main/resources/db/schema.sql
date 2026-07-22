@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS doc_node (
-    id                  BIGINT       NOT NULL,
+    id                  BIGINT       NOT NULL AUTO_INCREMENT,
     parent_id           BIGINT       NOT NULL DEFAULT 0,
     node_type           VARCHAR(16)  NOT NULL,
     draft_name          VARCHAR(200) NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS doc_document (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE IF NOT EXISTS doc_asset (
-    id              BIGINT       NOT NULL,
+    id              BIGINT       NOT NULL AUTO_INCREMENT,
     document_id     BIGINT       NOT NULL,
     asset_kind      VARCHAR(16)  NOT NULL,
     status          VARCHAR(16)  NOT NULL,
