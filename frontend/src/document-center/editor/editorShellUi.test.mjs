@@ -234,6 +234,13 @@ test('块菜单补齐任务清单、字号、下划线和删除线工具', () =>
   assert.match(blockToolbarSource, /toggleStrike/);
 });
 
+test('标题节点不允许叠加字号样式', () => {
+  assert.match(blockToolbarSource, /function allowsFontSizeFormatting/);
+  assert.match(blockToolbarSource, /target\.type !== 'heading' && allowsFontSizeFormatting\(targetDocumentBlock\(\)\)/);
+  assert.match(blockToolbarSource, /if \(!allowsFontSizeFormatting\(targetDocumentBlock\(\)\)\) return/);
+  assert.match(blockToolbarSource, /if \(!allowsFontSizeFormatting\(block\)\) return false/);
+});
+
 test('表格入口使用尺寸选择器且块菜单不再提供行列增删', () => {
   assert.match(blockToolbarSource, /TableSizePicker/);
   assert.match(blockToolbarSource, /insertTable\(\{ rows, cols: columns, withHeaderRow: true \}\)/);

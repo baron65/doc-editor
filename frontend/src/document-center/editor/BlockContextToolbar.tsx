@@ -455,6 +455,7 @@ export function BlockContextToolbar({
   };
 
   const applyTargetFontSize = (fontSize: string) => {
+    if (!allowsFontSizeFormatting(targetDocumentBlock())) return;
     const range = getDocumentBlockTextRange(targetDocumentBlock());
     if (!range || range.from === range.to) return;
     run(() => {
@@ -636,7 +637,9 @@ export function BlockContextToolbar({
               <MenuGroup label="格式">
                 <MenuButton hasSubmenu icon={<BlockToolIcon type="align-left" />} label="缩进和对齐" shortcut={shortcutLabel('alignLeft')} onHover={(event) => openCascadeMenu('alignment', event)} onRun={() => undefined} />
                 <MenuButton hasSubmenu icon={<BlockToolIcon type="color" />} label="文字颜色" shortcut={shortcutLabel('colorDefault')} onHover={(event) => openCascadeMenu('color', event)} onRun={() => undefined} />
-                <MenuButton hasSubmenu icon={<BlockToolIcon type="font-size" />} label="字号" shortcut={shortcutLabel('fontSizeBody')} onHover={(event) => openCascadeMenu('fontSize', event)} onRun={() => undefined} />
+                {target.type !== 'heading' && allowsFontSizeFormatting(targetDocumentBlock()) ? (
+                  <MenuButton hasSubmenu icon={<BlockToolIcon type="font-size" />} label="字号" shortcut={shortcutLabel('fontSizeBody')} onHover={(event) => openCascadeMenu('fontSize', event)} onRun={() => undefined} />
+                ) : null}
               </MenuGroup>
               <MenuGroup label="插入">
                 <MenuButton label="分割线" shortcut={shortcutLabel('horizontalRule')} onRun={() => run(() => insertAfterTarget({ type: 'horizontalRule' }))} />
@@ -1281,6 +1284,7 @@ function runShortcutAction(
     case 'fontSizeMedium':
     case 'fontSizeLarge':
     case 'fontSizeXLarge': {
+      if (!allowsFontSizeFormatting(block)) return false;
       const range = getDocumentBlockTextRange(block);
       if (!range || range.from === range.to) return false;
       const fontSize = {
@@ -1300,6 +1304,12 @@ function runShortcutAction(
     default:
       return false;
   }
+}
+
+function allowsFontSizeFormatting(block?: DocumentBlockTarget) {
+  if (!block) return false;
+  const textBlock = resolveFormattableTextBlockTarget(block);
+  return Boolean(textBlock && textBlock.node.type.name !== 'heading');
 }
 
 async function copyNodeAsRichContent(node: ProseMirrorNode, schema: Schema): Promise<void> {
