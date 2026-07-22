@@ -1,7 +1,8 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 
 export interface AttachmentAttributes {
-  assetId: string;
+  assetId?: string;
+  href?: string;
   originalName: string;
   mimeType: string;
   sizeBytes: string;
@@ -24,6 +25,7 @@ export const AttachmentExtension = Node.create({
   addAttributes() {
     return {
       assetId: { default: null },
+      href: { default: '' },
       originalName: { default: '' },
       mimeType: { default: 'application/octet-stream' },
       sizeBytes: { default: '0' },
@@ -40,6 +42,7 @@ export const AttachmentExtension = Node.create({
       'div',
       mergeAttributes(HTMLAttributes, {
         'data-type': 'attachment',
+        'data-href': node.attrs.href || undefined,
         class: 'attachment-card',
       }),
       ['div', { class: 'attachment-card__icon', 'aria-hidden': 'true' }, fileBadge],
@@ -47,7 +50,7 @@ export const AttachmentExtension = Node.create({
         'div',
         { class: 'attachment-card__content' },
         ['div', { class: 'attachment-card__name' }, node.attrs.originalName],
-        ['div', { class: 'attachment-card__meta' }, `${node.attrs.mimeType} · ${formatFileSize(node.attrs.sizeBytes)}`],
+        ['div', { class: 'attachment-card__meta' }, buildAttachmentMeta(node.attrs.mimeType, node.attrs.sizeBytes)],
       ],
     ];
   },
@@ -70,6 +73,10 @@ function formatFileSize(value: string) {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function buildAttachmentMeta(mimeType: string, sizeBytes: string) {
+  return Number(sizeBytes) > 0 ? `${mimeType} · ${formatFileSize(sizeBytes)}` : mimeType;
 }
 
 function getFileBadge(originalName: string, mimeType: string) {

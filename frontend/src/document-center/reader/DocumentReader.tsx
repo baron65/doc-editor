@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { MermaidRenderer } from '../mermaid/MermaidRenderer';
 import type { DocumentContent } from '../../types/documentCenter';
 import { buildAssetUrl, formatFileSize, type AssetScope } from './assetPresentation';
+import { isSafeAttachmentHref } from '../attachment/attachmentLink';
 import { buildReaderContent, selectActiveHeadingId, type DocumentNavigationItem } from './readerModel';
 import { CodeBlock } from './CodeBlock';
 import { buildBlockTextStyle, normalizeFontSize, normalizeTextBackgroundColor, normalizeTextColor } from '../content/blockFormatting';
@@ -237,7 +238,11 @@ function renderNode(node: DocumentContent, documentId: string, assetScope: Asset
     case 'bulletList':
       return <ul key={key}>{renderChildren(node.content, documentId, assetScope)}</ul>;
     case 'orderedList':
-      return <ol key={key}>{renderChildren(node.content, documentId, assetScope)}</ol>;
+      return (
+        <ol key={key} start={positiveIntegerAttribute(node.attrs?.start)}>
+          {renderChildren(node.content, documentId, assetScope)}
+        </ol>
+      );
     case 'taskList':
       return <ul key={key} data-type="taskList">{renderChildren(node.content, documentId, assetScope)}</ul>;
     case 'taskItem':
@@ -432,14 +437,21 @@ function renderAttachment(node: DocumentContent, documentId: string, assetScope:
   const originalName = typeof node.attrs?.originalName === 'string' ? node.attrs.originalName : '附件';
   const mimeType = typeof node.attrs?.mimeType === 'string' ? node.attrs.mimeType : 'application/octet-stream';
   const sizeBytes = typeof node.attrs?.sizeBytes === 'string' ? node.attrs.sizeBytes : '0';
-  const href = assetId ? buildAssetUrl(documentId, assetId, assetScope) : '#';
+  const attachmentHref = node.attrs?.href;
+  const href = assetId
+    ? buildAssetUrl(documentId, assetId, assetScope)
+    : isSafeAttachmentHref(attachmentHref)
+      ? attachmentHref.trim()
+      : '#';
   const fileBadge = getFileBadge(originalName, mimeType);
   return (
     <div key={key} className="attachment-card">
       <div className="attachment-card__icon" aria-hidden="true">{fileBadge}</div>
       <div className="attachment-card__content">
         <div className="attachment-card__name">{originalName}</div>
-        <div className="attachment-card__meta">{mimeType} · {formatFileSize(sizeBytes)}</div>
+        <div className="attachment-card__meta">
+          {mimeType}{Number(sizeBytes) > 0 ? ` · ${formatFileSize(sizeBytes)}` : ''}
+        </div>
       </div>
       <a className="attachment-card__download" href={href} download aria-label={`下载 ${originalName}`} title="下载附件">
         ↓
@@ -487,6 +499,11 @@ function NavigationLink({ direction, item }: { direction: 'previous' | 'next'; i
 
 function stringAttribute(value: unknown) {
   return typeof value === 'string' ? value : undefined;
+}
+
+function positiveIntegerAttribute(value: unknown) {
+  const number = Number(value ?? 1);
+  return Number.isInteger(number) && number > 0 ? number : 1;
 }
 
 function isSafeHref(href: string) {

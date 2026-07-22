@@ -19,8 +19,10 @@ import { BlockContextToolbar } from './BlockContextToolbar';
 import { TableContextToolbar } from './TableContextToolbar';
 import { useAppDialog } from '@/components/app-dialog/AppDialog';
 import { normalizeMermaidCodeBlocks } from '../content/mermaidContent';
+import { normalizeOrderedListSequences } from '../content/orderedListContent';
 import { buildAssetUrl } from '../reader/assetPresentation';
 import { IMAGE_NODE_ACTION_EVENT, type ImageNodeActionDetail } from '../image/ImageNodeAction';
+import { normalizeMarkdownAttachments } from '../content/attachmentContent';
 
 interface DocumentEditorShellProps {
   document?: AdminDocumentDetail;
@@ -161,19 +163,26 @@ export const DocumentEditorShell = forwardRef<DocumentEditorShellHandle, Documen
     if (!document) {
       return;
     }
-    const nextContent = normalizeMermaidCodeBlocks(document.content ?? emptyDocumentContent);
+    const sourceContent = document.content ?? emptyDocumentContent;
+    const mermaidNormalizedContent = normalizeMermaidCodeBlocks(sourceContent);
+    const attachmentNormalizedContent = normalizeMarkdownAttachments(mermaidNormalizedContent);
+    const shouldPersistAttachmentMigration = JSON.stringify(attachmentNormalizedContent)
+      !== JSON.stringify(mermaidNormalizedContent);
+    const nextContent = normalizeOrderedListSequences(attachmentNormalizedContent);
     conflictRef.current = false;
-    dirtyRef.current = false;
+    dirtyRef.current = shouldPersistAttachmentMigration;
     setTitle(document.title);
     setContent(nextContent);
     draftRevisionRef.current = document.draftRevision;
     setPublicationVersion(document.publicationVersion);
     setPublished(document.published);
     setPublishState(document.publishState);
-    setDirty(false);
-    setSaveState('saved');
+    setDirty(shouldPersistAttachmentMigration);
+    setSaveState(shouldPersistAttachmentMigration ? 'dirty' : 'saved');
     setErrorMessage(undefined);
-    setStatus(document.published ? '线上稿已发布，可继续编辑草稿。' : '当前为草稿态。');
+    setStatus(shouldPersistAttachmentMigration
+      ? '检测到 Markdown 附件链接，已转换为附件卡片并等待自动保存。'
+      : document.published ? '线上稿已发布，可继续编辑草稿。' : '当前为草稿态。');
     const hydrationFrame = window.requestAnimationFrame(() => {
       if (!editor) return;
       hydratingRef.current = true;

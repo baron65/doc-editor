@@ -1,5 +1,5 @@
 import Image from '@tiptap/extension-image';
-import { TaskItem, TaskList } from '@tiptap/extension-list';
+import { ListItem, TaskItem, TaskList } from '@tiptap/extension-list';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import StarterKit from '@tiptap/starter-kit';
 import { ReactNodeViewRenderer } from '@tiptap/react';
@@ -42,10 +42,15 @@ const DocumentTableCell = TableCell.extend({
   },
 });
 
+const DocumentListItem = ListItem.extend({
+  content: '(paragraph|heading) block*',
+});
+
 export function createDocumentSchemaExtensions() {
   return [
     StarterKit.configure({
       codeBlock: false,
+      listItem: false,
       heading: {
         levels: [1, 2, 3, 4, 5],
       },
@@ -89,6 +94,7 @@ export function createDocumentSchemaExtensions() {
     TableRow,
     DocumentTableHeader,
     DocumentTableCell,
+    DocumentListItem,
     TaskList,
     TaskItem.configure({ nested: true }),
     AttachmentExtension,

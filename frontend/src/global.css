@@ -66,6 +66,39 @@ body {
   font-size: 0.875rem;
 }
 
+.document-body ol:not(.code-line-numbers) > li:has(> h1:first-child)::marker {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.document-body ol:not(.code-line-numbers) > li:has(> h2:first-child)::marker {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.document-body ol:not(.code-line-numbers) > li:has(> h3:first-child)::marker {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.document-body ol:not(.code-line-numbers) > li:has(> h4:first-child)::marker {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.document-body ol:not(.code-line-numbers) > li:has(> h5:first-child)::marker {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.document-body ol:not(.code-line-numbers) > li::marker {
+  color: #3370ff;
+}
+
+.document-body ul:not([data-type='taskList']) > li::marker {
+  color: #3370ff;
+}
+
 .document-body ul,
 .document-body ol {
   margin: 0.75rem 0;

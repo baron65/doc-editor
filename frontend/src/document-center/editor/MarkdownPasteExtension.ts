@@ -4,15 +4,22 @@ import { Plugin } from '@tiptap/pm/state';
 import type { DocumentContent } from '../../types/documentCenter';
 import { createDocumentSchemaExtensions } from './documentSchemaExtensions';
 import { normalizeMermaidCodeBlocks } from '../content/mermaidContent';
+import { normalizeMarkdownAttachments } from '../content/attachmentContent';
+
+export { normalizeMarkdownAttachments } from '../content/attachmentContent';
 
 const FENCED_BLOCK = /^```[^\n]*\n[\s\S]+?\n```/m;
 const NESTED_LIST = /^(?:\s*[-*+] |\s*\d+\. ).+\n\s{2,}(?:[-*+] |\d+\. )/m;
 const TABLE_SEPARATOR = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/m;
 const HEADING_WITH_OTHER_BLOCK = /^#{1,6}\s+.+\n(?:\s*\n)?\S/m;
+const ATTACHMENT_MARKDOWN = /^\s*(?:📎\s*\[[^\]]+\]|\[📎\s*[^\]]+\])\([^)]+\)\s*$/;
 
 let markdownManager: MarkdownManager | undefined;
 
 export function isStrongMarkdown(text: string) {
+  if (ATTACHMENT_MARKDOWN.test(text)) {
+    return true;
+  }
   if (!text.includes('\n')) {
     return false;
   }
@@ -24,7 +31,9 @@ export function isStrongMarkdown(text: string) {
 
 export function parseMarkdownToDocument(markdown: string): DocumentContent {
   markdownManager ??= new MarkdownManager({ extensions: createDocumentSchemaExtensions() });
-  return normalizeMermaidCodeBlocks(markdownManager.parse(markdown) as DocumentContent);
+  return normalizeMarkdownAttachments(
+    normalizeMermaidCodeBlocks(markdownManager.parse(markdown) as DocumentContent),
+  );
 }
 
 export const MarkdownPasteExtension = Extension.create({

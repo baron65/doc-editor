@@ -91,6 +91,9 @@ public class DocumentContentAbility {
             throw new ValidationFailure("root node type must be doc");
         }
         validateFormattingAttributes(type, node.get("attrs"));
+        if ("attachment".equals(type)) {
+            validateAttachmentAttributes(node.get("attrs"));
+        }
         if (NODE_TYPE_MERMAID.equals(type)) {
             stats.count++;
             String source = resolveMermaidSource(node);
@@ -249,6 +252,34 @@ public class DocumentContentAbility {
             URI uri = new URI(value);
             String scheme = uri.getScheme();
             return scheme != null && Set.of("http", "https", "mailto").contains(scheme.toLowerCase(Locale.ROOT));
+        } catch (URISyntaxException exception) {
+            return false;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateAttachmentAttributes(Object value) {
+        if (!(value instanceof Map)) {
+            return;
+        }
+        Object href = ((Map<String, Object>) value).get("href");
+        if (href == null || (href instanceof String && ((String) href).trim().isEmpty())) {
+            return;
+        }
+        if (!(href instanceof String) || !isSafeAttachmentHref((String) href)) {
+            throw new ValidationFailure("unsafe attachment link protocol");
+        }
+    }
+
+    private boolean isSafeAttachmentHref(String href) {
+        String value = href.trim();
+        if (value.startsWith("/") && !value.startsWith("//")) {
+            return true;
+        }
+        try {
+            URI uri = new URI(value);
+            String scheme = uri.getScheme();
+            return scheme != null && Set.of("http", "https").contains(scheme.toLowerCase(Locale.ROOT));
         } catch (URISyntaxException exception) {
             return false;
         }

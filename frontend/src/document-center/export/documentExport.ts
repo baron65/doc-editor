@@ -1,6 +1,7 @@
 import type { DocumentContent, PublishedDocumentDetail } from '../../types/documentCenter';
 import { buildAssetUrl } from '../reader/assetPresentation';
 import { extractDocumentText, isMermaidLanguage } from '../content/mermaidContent';
+import { isSafeAttachmentHref } from '../attachment/attachmentLink';
 
 type ExportableDocument = Pick<PublishedDocumentDetail, 'documentId' | 'title' | 'content' | 'publishedAt'>;
 
@@ -148,9 +149,30 @@ function renderList(
   assetScope: 'published' | 'admin',
   ordered: boolean,
 ): string {
+  const start = ordered ? positiveIntegerAttribute(node.attrs?.start) : 1;
   return (node.content ?? [])
-    .map((item, index) => `${ordered ? `${index + 1}.` : '-'} ${renderListItem(item, documentId, assetScope)}`)
+    .map((item, index) => ordered
+      ? renderOrderedListItem(item, start + index, documentId, assetScope)
+      : `- ${renderListItem(item, documentId, assetScope)}`)
     .join('\n');
+}
+
+function renderOrderedListItem(
+  node: DocumentContent,
+  number: number,
+  documentId: string,
+  assetScope: 'published' | 'admin',
+) {
+  const content = node.content ?? [];
+  const first = content[0];
+  if (first?.type !== 'heading') {
+    return `${number}. ${renderListItem(node, documentId, assetScope)}`;
+  }
+
+  const level = clampHeadingLevel(first.attrs?.level);
+  const heading = `${'#'.repeat(level)} ${number}. ${renderInline(first.content, documentId, assetScope)}`.trim();
+  const rest = renderBlocks(content.slice(1), documentId, assetScope);
+  return rest ? `${heading}\n\n${rest}` : heading;
 }
 
 function renderTaskList(node: DocumentContent, documentId: string, assetScope: 'published' | 'admin'): string {
@@ -181,7 +203,12 @@ function renderImage(node: DocumentContent, documentId: string, assetScope: 'pub
 function renderAttachment(node: DocumentContent, documentId: string, assetScope: 'published' | 'admin') {
   const assetId = stringAttribute(node.attrs?.assetId);
   const originalName = stringAttribute(node.attrs?.originalName) || '附件';
-  const href = assetId ? toOnlineUrl(buildAssetUrl(documentId, assetId, assetScope)) : '#';
+  const attachmentHref = node.attrs?.href;
+  const href = assetId
+    ? toOnlineUrl(buildAssetUrl(documentId, assetId, assetScope))
+    : isSafeAttachmentHref(attachmentHref)
+      ? attachmentHref.trim()
+      : '#';
   return `📎 [${escapeMarkdownLinkLabel(originalName)}](${href})`;
 }
 
@@ -271,6 +298,11 @@ function clampHeadingLevel(value: unknown) {
 
 function stringAttribute(value: unknown) {
   return typeof value === 'string' ? value : undefined;
+}
+
+function positiveIntegerAttribute(value: unknown) {
+  const number = Number(value ?? 1);
+  return Number.isInteger(number) && number > 0 ? number : 1;
 }
 
 function toOnlineUrl(path: string) {

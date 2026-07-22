@@ -111,6 +111,52 @@ test('Markdown 下载文件名会清理系统非法字符', () => {
   assert.equal(buildMarkdownFileName('   '), 'document.md');
 });
 
+test('编号标题导出为标题内置序号并保留续排起始值', () => {
+  const document = {
+    documentId: 'ordered-heading',
+    title: '标题续排',
+    schemaVersion: 1,
+    publishedRevision: '1',
+    publicationVersion: '1',
+    content: {
+      type: 'doc',
+      content: [{
+        type: 'orderedList',
+        attrs: { start: 3 },
+        content: [{
+          type: 'listItem',
+          content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '第三节' }] }],
+        }],
+      }],
+    },
+  } satisfies PublishedDocumentDetail;
+
+  assert.match(exportDocumentAsMarkdown(document), /## 3\. 第三节/);
+});
+
+test('普通有序列表仍使用 Markdown 列表语法', () => {
+  const document = {
+    documentId: 'ordered-body',
+    title: '正文列表',
+    schemaVersion: 1,
+    publishedRevision: '1',
+    publicationVersion: '1',
+    content: {
+      type: 'doc',
+      content: [{
+        type: 'orderedList',
+        attrs: { start: 2 },
+        content: [{
+          type: 'listItem',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: '第二项' }] }],
+        }],
+      }],
+    },
+  } satisfies PublishedDocumentDetail;
+
+  assert.match(exportDocumentAsMarkdown(document), /2\. 第二项/);
+});
+
 function documentWithTable(rows: PublishedDocumentDetail['content']['content']): PublishedDocumentDetail {
   return {
     documentId: 'table-doc',

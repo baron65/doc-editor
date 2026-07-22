@@ -34,6 +34,22 @@ class DocumentContentAbilityTest {
     }
 
     @Test
+    void acceptsSafeMarkdownAttachmentLinksAndRejectsUnsafeProtocols() {
+        DocumentContentAbility ability = new DocumentContentAbility();
+        String safe = "{\"type\":\"doc\",\"content\":[{\"type\":\"attachment\",\"attrs\":{"
+                + "\"assetId\":null,\"href\":\"https://example.com/files/guide.pdf\","
+                + "\"originalName\":\"guide.pdf\",\"mimeType\":\"application/pdf\",\"sizeBytes\":\"0\"}}]}";
+        String unsafe = "{\"type\":\"doc\",\"content\":[{\"type\":\"attachment\",\"attrs\":{"
+                + "\"assetId\":null,\"href\":\"javascript:alert(1)\","
+                + "\"originalName\":\"guide.pdf\",\"mimeType\":\"application/pdf\",\"sizeBytes\":\"0\"}}]}";
+
+        assertThat(ability.validateDraftContent(1, safe).isValid()).isTrue();
+        ContentValidationResultBO unsafeResult = ability.validateDraftContent(1, unsafe);
+        assertThat(unsafeResult.isValid()).isFalse();
+        assertThat(unsafeResult.getReason()).contains("attachment link protocol");
+    }
+
+    @Test
     void acceptsSafeAlignmentIndentAndTextColor() {
         DocumentContentAbility ability = new DocumentContentAbility();
         String content = "{\"type\":\"doc\",\"content\":[{"

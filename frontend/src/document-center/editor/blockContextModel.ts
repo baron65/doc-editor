@@ -207,6 +207,54 @@ export function resolveFormattableTextBlockTarget(
   return result;
 }
 
+export function getNextOrderedHeadingStart(
+  doc: ProseMirrorNode,
+  beforePos: number,
+  headingLevel: number,
+) {
+  let previousNumber = 0;
+
+  doc.descendants((node, pos) => {
+    if (pos >= beforePos) {
+      return false;
+    }
+    if (node.type.name !== 'orderedList') {
+      return true;
+    }
+
+    const start = Math.max(1, Number(node.attrs.start ?? 1));
+    let sameLevelHeadingCount = 0;
+    node.forEach((item) => {
+      const firstChild = item.firstChild;
+      if (
+        firstChild?.type.name === 'heading'
+        && Number(firstChild.attrs.level) === headingLevel
+      ) {
+        previousNumber = start + sameLevelHeadingCount;
+        sameLevelHeadingCount += 1;
+      }
+    });
+    return false;
+  });
+
+  return previousNumber > 0 ? previousNumber + 1 : 1;
+}
+
+export function getOrderedListStartForBlock(
+  doc: ProseMirrorNode,
+  beforePos: number,
+  textBlock: ProseMirrorNode,
+) {
+  if (textBlock.type.name !== 'heading') {
+    return 1;
+  }
+  return getNextOrderedHeadingStart(
+    doc,
+    beforePos,
+    Number(textBlock.attrs.level ?? 1),
+  );
+}
+
 export function getBlockMenuSide(
   handleViewportLeft: number,
   viewportWidth: number,

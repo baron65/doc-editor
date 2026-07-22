@@ -1,4 +1,5 @@
 import type { DocumentContent, DocumentTreeNode } from '../../types/documentCenter';
+import { normalizeMarkdownAttachments } from '../content/attachmentContent';
 
 export interface HeadingItem {
   id: string;
@@ -20,8 +21,25 @@ export function buildReaderContent(content: DocumentContent) {
   const headings: HeadingItem[] = [];
   const slugCounts = new Map<string, number>();
 
-  function visit(node: DocumentContent): DocumentContent {
-    const children = node.content?.map(visit);
+  function visit(node: DocumentContent, orderedNumber?: number): DocumentContent {
+    if (node.type === 'orderedList') {
+      const start = positiveInteger(node.attrs?.start);
+      return {
+        ...node,
+        content: node.content?.map((child, index) => visit(child, start + index)),
+      };
+    }
+    if (node.type === 'listItem') {
+      return {
+        ...node,
+        content: node.content?.map((child, index) => visit(
+          child,
+          index === 0 ? orderedNumber : undefined,
+        )),
+      };
+    }
+
+    const children = node.content?.map((child) => visit(child));
     if (node.type !== 'heading') {
       return { ...node, content: children };
     }
@@ -29,8 +47,13 @@ export function buildReaderContent(content: DocumentContent) {
     if (level !== 2 && level !== 3) {
       return { ...node, content: children };
     }
-    const text = extractText(node).trim() || '未命名章节';
-    const baseSlug = slugify(text);
+    const headingText = extractText(node).trim() || '未命名章节';
+    const text = orderedNumber === undefined
+      ? headingText
+      : `${orderedNumber}. ${headingText}`;
+    // Keep anchors stable when a heading is converted to or from an ordered
+    // list. The number is presentation metadata rather than heading content.
+    const baseSlug = slugify(headingText);
     const count = (slugCounts.get(baseSlug) ?? 0) + 1;
     slugCounts.set(baseSlug, count);
     const id = count === 1 ? baseSlug : `${baseSlug}-${count}`;
@@ -42,7 +65,12 @@ export function buildReaderContent(content: DocumentContent) {
     };
   }
 
-  return { content: visit(content), headings };
+  return { content: visit(normalizeMarkdownAttachments(content)), headings };
+}
+
+function positiveInteger(value: unknown) {
+  const number = Number(value ?? 1);
+  return Number.isInteger(number) && number > 0 ? number : 1;
 }
 
 export function getDocumentNavigation(nodes: DocumentTreeNode[], documentId: string) {

@@ -241,6 +241,36 @@ test('标题节点不允许叠加字号样式', () => {
   assert.match(blockToolbarSource, /if \(!allowsFontSizeFormatting\(block\)\) return false/);
 });
 
+test('标题只允许与编号列表组合，不能与无序列表或任务列表组合', () => {
+  assert.match(documentSchemaExtensionsSource, /listItem: false/);
+  assert.match(documentSchemaExtensionsSource, /ListItem\.extend\(\{/);
+  assert.match(documentSchemaExtensionsSource, /content: '\(paragraph\|heading\) block\*'/);
+  assert.match(blockToolbarSource, /function isTargetTextBlockType/);
+  assert.match(blockToolbarSource, /isTargetTextBlockType\(targetDocumentBlock\(\), 'heading', \{ level \}\)/);
+  assert.match(blockToolbarSource, /isTargetTextBlockType\(targetDocumentBlock\(\), 'paragraph'\)/);
+  assert.match(blockToolbarSource, /function canApplyHeadingToBlock/);
+  assert.match(blockToolbarSource, /function canApplyListToBlock/);
+  assert.match(blockToolbarSource, /disabled=\{!canApplyHeadingToBlock\(targetDocumentBlock\(\)\)\}/);
+  assert.match(blockToolbarSource, /disabled=\{!canApplyListToBlock\(targetDocumentBlock\(\), 'bulletList'\)\}/);
+  assert.match(blockToolbarSource, /if \(!canApplyHeadingToBlock\(block\)\) return false/);
+  assert.match(blockToolbarSource, /if \(!canApplyListToBlock\(block, 'bulletList'\)\) return false/);
+});
+
+test('所有编号使用科技蓝，标题编号字号与标题级别保持一致', () => {
+  for (const [level, size] of [['1', '1.5rem'], ['2', '1.25rem'], ['3', '1.125rem'], ['4', '1rem'], ['5', '0.875rem']]) {
+    assert.match(
+      globalCssSource,
+      new RegExp(`ol:not\\(\\.code-line-numbers\\) > li:has\\(> h${level}:first-child\\)::marker\\s*\\{[^}]*font-size:\\s*${size}`),
+    );
+  }
+  assert.match(globalCssSource, /ol:not\(\.code-line-numbers\) > li::marker\s*\{[^}]*color:\s*#3370ff/);
+  assert.match(blockToolbarSource, /function toggleOrderedListForBlock/);
+  assert.match(blockToolbarSource, /getOrderedListStartForBlock/);
+  assert.match(blockToolbarSource, /toggleOrderedListForBlock\(editor, targetDocumentBlock\(\)\)/);
+  assert.match(blockToolbarSource, /toggleOrderedListForBlock\(editor, block\)/);
+  assert.match(blockToolbarSource, /wrapInList\('orderedList', \{ start \}\)/);
+});
+
 test('表格入口使用尺寸选择器且块菜单不再提供行列增删', () => {
   assert.match(blockToolbarSource, /TableSizePicker/);
   assert.match(blockToolbarSource, /insertTable\(\{ rows, cols: columns, withHeaderRow: true \}\)/);

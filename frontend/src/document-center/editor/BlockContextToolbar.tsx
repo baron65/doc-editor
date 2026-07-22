@@ -14,6 +14,7 @@ import {
   getBlockHandlePresentation,
   getBlockMenuSide,
   getDocumentBlockTextRange,
+  getOrderedListStartForBlock,
   resolveDocumentBlockTarget,
   resolveFormattableTextBlockTarget,
   type DocumentBlockTarget,
@@ -35,6 +36,7 @@ import {
 } from '../content/blockFormatting';
 import { TableSizePicker } from './TableSizePicker';
 import { InlineToolIcon } from './InlineToolIcon';
+import { isSafeAttachmentHref } from '../attachment/attachmentLink';
 
 interface BlockContextToolbarProps {
   editor: Editor | null;
@@ -537,7 +539,9 @@ export function BlockContextToolbar({
             aria-label="下载附件"
             className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 no-underline hover:bg-gray-100 hover:text-brand-600"
             download
-            href={getAttachmentDownloadUrl?.(String(target.attrs.assetId ?? '')) || '#'}
+            href={isSafeAttachmentHref(target.attrs.href)
+              ? target.attrs.href.trim()
+              : getAttachmentDownloadUrl?.(String(target.attrs.assetId ?? '')) || '#'}
             title="下载附件"
             onMouseDown={(event) => event.preventDefault()}
             onClick={(event) => event.stopPropagation()}
@@ -610,7 +614,7 @@ export function BlockContextToolbar({
               <MenuGroup compact label="转换为">
                 <MenuButton
                   compact
-                  active={target.type === 'paragraph'}
+                  active={isTargetTextBlockType(targetDocumentBlock(), 'paragraph')}
                   icon="T"
                   label="正文"
                   shortcut={shortcutLabel('paragraph')}
@@ -620,15 +624,16 @@ export function BlockContextToolbar({
                   <MenuButton
                     key={level}
                     compact
-                    active={target.type === 'heading' && Number(target.attrs.level) === level}
+                    active={isTargetTextBlockType(targetDocumentBlock(), 'heading', { level })}
+                    disabled={!canApplyHeadingToBlock(targetDocumentBlock())}
                     icon={`H${level}`}
                     label={`H${level}`}
                     shortcut={shortcutLabel(`heading${level}` as BlockShortcutName)}
                     onRun={() => run(() => focusTarget().toggleHeading({ level }).run())}
                   />
                 ))}
-                <MenuButton compact active={target.type === 'orderedList'} icon={<BlockToolIcon type="ordered-list" />} label="编号" shortcut={shortcutLabel('orderedList')} onRun={() => run(() => focusTarget().toggleOrderedList().run())} />
-                <MenuButton compact active={target.type === 'bulletList'} icon={<BlockToolIcon type="bullet-list" />} label="列表" shortcut={shortcutLabel('bulletList')} onRun={() => run(() => focusTarget().toggleBulletList().run())} />
+                <MenuButton compact active={target.type === 'orderedList'} icon={<BlockToolIcon type="ordered-list" />} label="编号" shortcut={shortcutLabel('orderedList')} onRun={() => run(() => toggleOrderedListForBlock(editor, targetDocumentBlock()))} />
+                <MenuButton compact active={target.type === 'bulletList'} disabled={!canApplyListToBlock(targetDocumentBlock(), 'bulletList')} icon={<BlockToolIcon type="bullet-list" />} label="列表" shortcut={shortcutLabel('bulletList')} onRun={() => run(() => focusTarget().toggleBulletList().run())} />
                 <MenuButton compact active={target.type === 'codeBlock'} icon={<BlockToolIcon type="code" />} label="代码块" shortcut={shortcutLabel('codeBlock')} onRun={() => run(() => onInsertCodeBlock(target.selectionPos))} />
                 <MenuButton compact active={target.type === 'blockquote'} icon={<BlockToolIcon type="quote" />} label="引用" shortcut={shortcutLabel('blockquote')} onRun={() => run(() => focusTarget().toggleBlockquote().run())} />
                 <MenuButton compact icon={<BlockToolIcon type="copy" />} label="复制节点" shortcut={shortcutLabel('duplicateNode')} onRun={copyTargetNode} />
@@ -800,6 +805,7 @@ function MenuButton({
   shortcut,
   compact,
   active,
+  disabled,
   danger,
   hasSubmenu,
   onHover,
@@ -810,6 +816,7 @@ function MenuButton({
   shortcut: string;
   compact?: boolean;
   active?: boolean;
+  disabled?: boolean;
   danger?: boolean;
   hasSubmenu?: boolean;
   onHover?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
@@ -820,7 +827,9 @@ function MenuButton({
       aria-label={`${label}，快捷键 ${shortcut}`}
       title={`${label} · ${shortcut}`}
       className={`${compact ? 'group relative flex h-10 items-center justify-center rounded-lg px-1 text-base' : 'flex min-h-8 w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[13px] leading-5'} ${
-        danger
+        disabled
+          ? 'cursor-not-allowed text-gray-300'
+          : danger
           ? 'text-red-700 hover:bg-red-50'
           : active
             ? 'bg-brand-50 font-medium text-brand-700'
@@ -828,6 +837,7 @@ function MenuButton({
       }`}
       type="button"
       role="menuitem"
+      disabled={disabled}
       data-has-submenu={hasSubmenu ? 'true' : undefined}
       onMouseDown={(event) => event.preventDefault()}
       onMouseOver={onHover}
@@ -1182,12 +1192,15 @@ function runShortcutAction(
     case 'heading3':
     case 'heading4':
     case 'heading5':
+      if (!canApplyHeadingToBlock(block)) return false;
       return focusBlock().toggleHeading({ level: Number(name.slice(-1)) as 1 | 2 | 3 | 4 | 5 }).run();
     case 'bulletList':
+      if (!canApplyListToBlock(block, 'bulletList')) return false;
       return focusBlock().toggleBulletList().run();
     case 'orderedList':
-      return focusBlock().toggleOrderedList().run();
+      return toggleOrderedListForBlock(editor, block);
     case 'taskList':
+      if (!canApplyListToBlock(block, 'taskList')) return false;
       return focusBlock().toggleTaskList().run();
     case 'blockquote':
       return focusBlock().toggleBlockquote().run();
@@ -1310,6 +1323,55 @@ function allowsFontSizeFormatting(block?: DocumentBlockTarget) {
   if (!block) return false;
   const textBlock = resolveFormattableTextBlockTarget(block);
   return Boolean(textBlock && textBlock.node.type.name !== 'heading');
+}
+
+function isTargetTextBlockType(
+  block: DocumentBlockTarget | undefined,
+  type: 'paragraph' | 'heading',
+  attrs?: { level?: number },
+) {
+  const textBlock = resolveFormattableTextBlockTarget(block);
+  if (!textBlock || textBlock.node.type.name !== type) return false;
+  if (type === 'heading' && attrs?.level !== undefined) {
+    return Number(textBlock.node.attrs.level) === attrs.level;
+  }
+  return true;
+}
+
+function canApplyHeadingToBlock(block?: DocumentBlockTarget) {
+  return Boolean(block && !['bulletList', 'taskList'].includes(block.presentationType));
+}
+
+function canApplyListToBlock(
+  block: DocumentBlockTarget | undefined,
+  listType: 'bulletList' | 'orderedList' | 'taskList',
+) {
+  if (!block || listType === 'orderedList') return Boolean(block);
+  return resolveFormattableTextBlockTarget(block)?.node.type.name !== 'heading';
+}
+
+function toggleOrderedListForBlock(
+  editor: Editor,
+  block?: DocumentBlockTarget,
+) {
+  if (!block) return false;
+  const position = Math.min(block.selectionPos, editor.state.doc.content.size);
+  const chain = editor.chain().focus().setTextSelection(position);
+  if (block.presentationType === 'orderedList') {
+    return chain.toggleOrderedList().run();
+  }
+
+  const textBlock = resolveFormattableTextBlockTarget(block);
+  const start = textBlock
+    ? getOrderedListStartForBlock(editor.state.doc, block.pos, textBlock.node)
+    : 1;
+
+  // Use wrapInList directly instead of toggleOrderedList for a new sequence.
+  // Tiptap's toggle command joins adjacent ordered lists automatically, which
+  // would mix heading numbering with a following paragraph list. Each explicit
+  // conversion starts an isolated sequence; only Enter inside that list adds
+  // another item to the same sequence.
+  return chain.wrapInList('orderedList', { start }).run();
 }
 
 async function copyNodeAsRichContent(node: ProseMirrorNode, schema: Schema): Promise<void> {

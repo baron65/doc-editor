@@ -5,6 +5,8 @@ import {
   getBlockHandlePresentation,
   getBlockMenuSide,
   getDocumentBlockTextRange,
+  getNextOrderedHeadingStart,
+  getOrderedListStartForBlock,
   resolveDocumentBlockTarget,
   resolveFormattableTextBlockTarget,
 } from './blockContextModel.ts';
@@ -19,7 +21,12 @@ const schema = new Schema({
       attrs: { level: { default: 1 } },
     },
     bulletList: { group: 'block', content: 'listItem+' },
-    listItem: { content: 'paragraph block*' },
+    orderedList: {
+      group: 'block',
+      content: 'listItem+',
+      attrs: { start: { default: 1 } },
+    },
+    listItem: { content: '(paragraph|heading) block*' },
     taskList: { group: 'block', content: 'taskItem+' },
     taskItem: { content: 'paragraph block*', attrs: { checked: { default: false } } },
     text: { group: 'inline' },
@@ -102,6 +109,56 @@ test('列表中鼠标所在行解析为对应列表项而不是整个列表', ()
   assert.equal(textBlock?.pos, secondItemStart + 1);
   assert.equal(textBlock?.node.type.name, 'paragraph');
   assert.equal(textBlock?.node.textContent, '第二项');
+});
+
+test('编号列表中的标题解析为列表项，同时内部文本块保持标题状态', () => {
+  const item = schema.node('listItem', null, schema.node('heading', { level: 3 }, schema.text('带编号的标题')));
+  const list = schema.node('orderedList', null, [item]);
+  const doc = schema.node('doc', null, list);
+
+  const target = resolveDocumentBlockTarget(doc, 4);
+
+  assert.equal(target?.presentationType, 'orderedList');
+  assert.equal(target?.node.type.name, 'listItem');
+  const textBlock = resolveFormattableTextBlockTarget(target);
+  assert.equal(textBlock?.node.type.name, 'heading');
+  assert.equal(textBlock?.node.attrs.level, 3);
+});
+
+test('后续同级编号标题从最近一个同级标题序号继续递增', () => {
+  const h2Item = schema.node('listItem', null, schema.node('heading', { level: 2 }, schema.text('第一个二级标题')));
+  const h3Item = schema.node('listItem', null, schema.node('heading', { level: 3 }, schema.text('第一个三级标题')));
+  const firstH2List = schema.node('orderedList', { start: 2 }, [h2Item]);
+  const laterH3List = schema.node('orderedList', { start: 8 }, [h3Item]);
+  const pendingHeading = schema.node('heading', { level: 2 }, schema.text('后续二级标题'));
+  const doc = schema.node('doc', null, [firstH2List, laterH3List, pendingHeading]);
+  const pendingHeadingPos = firstH2List.nodeSize + laterH3List.nodeSize;
+
+  assert.equal(getNextOrderedHeadingStart(doc, pendingHeadingPos, 2), 3);
+  assert.equal(getNextOrderedHeadingStart(doc, pendingHeadingPos, 4), 1);
+  assert.equal(getOrderedListStartForBlock(doc, pendingHeadingPos, pendingHeading), 3);
+  assert.equal(
+    getOrderedListStartForBlock(
+      doc,
+      pendingHeadingPos,
+      schema.node('paragraph', null, schema.text('独立正文列表')),
+    ),
+    1,
+  );
+});
+
+test('标题序号只统计同级标题，不受正文和其他级标题影响', () => {
+  const mixedList = schema.node('orderedList', { start: 1 }, [
+    schema.node('listItem', null, schema.node('heading', { level: 1 }, schema.text('一级标题一'))),
+    schema.node('listItem', null, schema.node('paragraph', null, schema.text('普通正文'))),
+    schema.node('listItem', null, schema.node('heading', { level: 2 }, schema.text('二级标题一'))),
+    schema.node('listItem', null, schema.node('heading', { level: 1 }, schema.text('一级标题二'))),
+  ]);
+  const pendingHeading = schema.node('heading', { level: 1 }, schema.text('一级标题三'));
+  const doc = schema.node('doc', null, [mixedList, pendingHeading]);
+
+  assert.equal(getNextOrderedHeadingStart(doc, mixedList.nodeSize, 1), 3);
+  assert.equal(getNextOrderedHeadingStart(doc, mixedList.nodeSize, 2), 2);
 });
 
 test('列表缩进区域命中列表容器边界时仍解析为相邻列表项', () => {

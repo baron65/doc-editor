@@ -1,11 +1,60 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isStrongMarkdown, parseMarkdownToDocument } from './MarkdownPasteExtension';
+import {
+  isStrongMarkdown,
+  normalizeMarkdownAttachments,
+  parseMarkdownToDocument,
+} from './MarkdownPasteExtension';
 
 test('普通单行文本和单行列表标记不触发 Markdown 转换', () => {
   assert.equal(isStrongMarkdown('普通文本'), false);
   assert.equal(isStrongMarkdown('# 可能只是井号'), false);
   assert.equal(isStrongMarkdown('- 单独一行'), false);
+});
+
+test('附件 Markdown 链接转换为附件卡片节点', () => {
+  const markdown = '📎 [MyBody_LessonPlan_V2.pdf](https://example.com/files/MyBody_LessonPlan_V2.pdf)';
+  assert.equal(isStrongMarkdown(markdown), true);
+
+  const result = parseMarkdownToDocument(markdown);
+
+  assert.equal(result.content?.[0].type, 'attachment');
+  assert.deepEqual(result.content?.[0].attrs, {
+    assetId: null,
+    href: 'https://example.com/files/MyBody_LessonPlan_V2.pdf',
+    originalName: 'MyBody_LessonPlan_V2.pdf',
+    mimeType: 'application/pdf',
+    sizeBytes: '0',
+  });
+});
+
+test('历史上已保存为普通链接的 Markdown 附件在加载时也会归一化', () => {
+  const result = normalizeMarkdownAttachments({
+    type: 'doc',
+    content: [{
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '📎 ' },
+        {
+          type: 'text',
+          text: 'MyBody_LessonPlan_V2.pdf',
+          marks: [{ type: 'link', attrs: { href: '/api/files/MyBody_LessonPlan_V2.pdf' } }],
+        },
+      ],
+    }],
+  });
+
+  assert.equal(result.content?.[0].type, 'attachment');
+  assert.equal(result.content?.[0].attrs?.href, '/api/files/MyBody_LessonPlan_V2.pdf');
+});
+
+test('回形针位于链接文本内部时也转换为附件节点', () => {
+  const result = parseMarkdownToDocument(
+    '[📎 MyBody_LessonPlan_V2.pdf](https://example.com/files/MyBody_LessonPlan_V2.pdf)',
+  );
+
+  assert.equal(result.content?.[0].type, 'attachment');
+  assert.equal(result.content?.[0].attrs?.originalName, 'MyBody_LessonPlan_V2.pdf');
 });
 
 test('标题组合、两级列表、围栏和表格属于强 Markdown', () => {

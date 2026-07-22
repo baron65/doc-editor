@@ -23,6 +23,68 @@ test('提取二三级标题并生成稳定且不重复的锚点', () => {
   assert.equal(result.content.content?.[2].attrs?.readerId, '快速开始-2');
 });
 
+test('有序列表内的标题在目录中包含实际序号但锚点保持基于标题文本', () => {
+  const content: DocumentContent = {
+    type: 'doc',
+    content: [{
+      type: 'orderedList',
+      attrs: { start: 3 },
+      content: [
+        {
+          type: 'listItem',
+          content: [{
+            type: 'heading',
+            attrs: { level: 2 },
+            content: [{ type: 'text', text: '背景' }],
+          }],
+        },
+        {
+          type: 'listItem',
+          content: [{
+            type: 'heading',
+            attrs: { level: 2 },
+            content: [{ type: 'text', text: '目标' }],
+          }],
+        },
+      ],
+    }],
+  };
+
+  const result = buildReaderContent(content);
+
+  assert.deepEqual(result.headings, [
+    { id: '背景', level: 2, text: '3. 背景' },
+    { id: '目标', level: 2, text: '4. 目标' },
+  ]);
+  assert.equal(
+    result.content.content?.[0]?.content?.[0]?.content?.[0]?.attrs?.readerId,
+    '背景',
+  );
+});
+
+test('历史发布稿中的 Markdown 附件链接在 Reader 构建阶段转换为附件卡片节点', () => {
+  const content: DocumentContent = {
+    type: 'doc',
+    content: [{
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '📎 ' },
+        {
+          type: 'text',
+          text: 'MyBody_LessonPlan_V2.pdf',
+          marks: [{ type: 'link', attrs: { href: 'https://example.com/MyBody_LessonPlan_V2.pdf' } }],
+        },
+      ],
+    }],
+  };
+
+  const result = buildReaderContent(content);
+
+  assert.equal(result.content.content?.[0].type, 'attachment');
+  assert.equal(result.content.content?.[0].attrs?.originalName, 'MyBody_LessonPlan_V2.pdf');
+  assert.equal(result.content.content?.[0].attrs?.href, 'https://example.com/MyBody_LessonPlan_V2.pdf');
+});
+
 test('按文档树深度优先顺序计算上一篇和下一篇', () => {
   const tree: DocumentTreeNode[] = [
     {
