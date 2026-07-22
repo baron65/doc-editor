@@ -1,7 +1,8 @@
 # AI Infra 文档发布中心前后端详细技术设计
 
 > 日期：2026-07-06
-> 状态：已完成文档一致性复核与后端项目结构规范对齐；当前按独立参考工程开发策略推进，企业内网迁移适配点后置
+> 最近同步：2026-07-22（以 `backend/src/main/resources/db/schema.sql`、V2/V3 迁移脚本和当前 PO/Mapper 为准）
+> 状态：已完成数据库字段、逻辑删除、索引及用户端导出能力同步
 > 依据：[产品设计](./2026-06-30-document-publishing-center-design.md)与[前后端技术调研](./2026-07-01-document-publishing-technical-research.md)
 > 适用技术栈：Java 11、Spring Boot 2.3.12.RELEASE、MyBatis-Plus 3.5.1、MySQL/OceanBase MySQL 模式、`@umijs/max@4.5.3`、TypeScript 4.9.5、Tailwind CSS 3.4.17、Tiptap 3
 
@@ -17,7 +18,7 @@
 - 上传、发布、下架、并发冲突等关键时序。
 - 安全、性能、可观测性、测试、上线和回退方案。
 
-本文是实现设计，不重新讨论以下已确认范围：不做多人实时协作、评论、分享、导出、审批、定时发布、历史版本、回滚、全文检索、文档级权限和外部内容嵌入。
+本文是实现设计，不重新讨论以下已确认范围：不做多人实时协作、评论、分享、审批、定时发布、历史版本、回滚、全文检索、文档级权限和外部内容嵌入。用户端当前文档导出 PDF/Markdown 已纳入本模块能力。
 
 ## 2. 设计基线与术语
 
@@ -153,6 +154,20 @@ flowchart LR
 - 时间字段示例使用 `DATETIME`；最终类型、默认值与审计字段命名继承现有项目基类。
 - `node_type`、`asset_kind`、`status`、`ref_scope` 使用字符串码值，不依赖数据库 `ENUM` 或 `CHECK`。
 
+#### 逻辑删除与当前数据库基线
+
+`doc_node`、`doc_document`、`doc_asset`、`doc_asset_ref`、`doc_tree_meta` 均包含以下逻辑删除字段：
+
+```text
+is_deleted  TINYINT NOT NULL DEFAULT 0
+deletor_id  BIGINT NULL
+delete_time DATETIME NULL
+```
+
+所有查询、更新、资源引用统计和树构建默认附带 `is_deleted = 0`。删除操作只更新上述字段，不执行物理 `DELETE`；资源对象的物理清理由资源清理任务在确认没有 DRAFT/PUBLISHED 引用后执行。
+
+当前 `schema.sql` 是新环境基线，已有环境按 `V2__document_center_logical_delete.sql` 和 `V3__document_center_audit_column_names.sql` 顺序迁移。V2 针对旧审计字段执行，不能在已经完成 V3 的数据库上重复执行。
+
 ### 4.2 ER 图
 
 ```mermaid
@@ -172,6 +187,11 @@ erDiagram
         varchar published_name
         int sort_order
         bigint node_version
+        bigint creator_id
+        datetime create_time
+        bigint updator_id
+        datetime update_time
+        tinyint is_deleted
     }
     DOC_DOCUMENT {
         bigint document_id PK
@@ -183,6 +203,7 @@ erDiagram
         bigint published_revision
         bigint publication_version
         tinyint is_published
+        tinyint is_deleted
     }
     DOC_ASSET {
         bigint id PK
@@ -190,15 +211,23 @@ erDiagram
         varchar asset_kind
         varchar status
         varchar storage_key
+        varchar original_name
+        varchar mime_type
+        bigint size_bytes
+        tinyint is_deleted
     }
     DOC_ASSET_REF {
         bigint document_id PK
         bigint asset_id PK
         varchar ref_scope PK
+        datetime create_time
+        tinyint is_deleted
     }
     DOC_TREE_META {
         tinyint meta_id PK
         bigint tree_revision
+        datetime update_time
+        tinyint is_deleted
     }
 ```
 
@@ -221,11 +250,13 @@ CREATE TABLE doc_node (
     create_time          DATETIME     NOT NULL,
     updator_id          BIGINT       NOT NULL,
     update_time          DATETIME     NOT NULL,
+    is_deleted           TINYINT      NOT NULL DEFAULT 0,
+    deletor_id           BIGINT       NULL,
+    delete_time          DATETIME     NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_doc_node_draft_name (parent_id, draft_name_key),
-    UNIQUE KEY uk_doc_node_published_name (parent_id, published_name_key),
-    KEY idx_doc_node_parent_sort (parent_id, sort_order, id),
-    KEY idx_doc_node_type (node_type)
+    UNIQUE KEY uk_doc_node_parent_draft_name (parent_id, draft_name_key),
+    UNIQUE KEY uk_doc_node_parent_published_name (parent_id, published_name_key),
+    KEY idx_doc_node_parent_sort (parent_id, sort_order, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='文档中心目录与文档节点';
 ```
 
@@ -237,7 +268,7 @@ CREATE TABLE doc_node (
 4. 归一化后为空或超过 200 个 Unicode 字符时拒绝。
 5. 前端只做提前提示，后端和唯一索引是最终约束。
 
-`published_name_key` 对未发布文档为 `NULL`。MySQL/OceanBase MySQL 模式的唯一索引允许多行 `NULL`，因此多个未发布文档不会互相冲突。发布、移动已发布文档、目录重命名时，线上名称冲突由服务预检和数据库唯一索引共同拦截。
+`published_name_key` 对未发布文档为 `NULL`。MySQL/OceanBase MySQL 模式的唯一索引允许多行 `NULL`，因此多个未发布文档不会互相冲突。当前数据库中的唯一索引不包含 `is_deleted`，所以已删除节点仍会占用原名称；在补充“删除后重名可复用”的迁移前，服务端不能把该行为视为已支持。若要正式支持复用，应将唯一约束改为只对 `is_deleted = 0` 生效的生成列/函数索引方案，并同步更新本 DDL 和迁移脚本，不能仅依赖应用层预检。
 
 ### 4.4 `doc_document`
 
@@ -246,7 +277,7 @@ CREATE TABLE doc_node (
 ```sql
 CREATE TABLE doc_document (
     document_id               BIGINT    NOT NULL COMMENT '与doc_node.id一一对应',
-    draft_schema_version      INT       NOT NULL DEFAULT 1,
+    draft_schema_version      INT       NOT NULL,
     draft_content_json        LONGTEXT  NOT NULL COMMENT '编辑稿Tiptap JSON',
     draft_revision            BIGINT    NOT NULL DEFAULT 1,
     published_schema_version  INT       NULL,
@@ -258,9 +289,11 @@ CREATE TABLE doc_document (
     draft_updated_at          DATETIME  NOT NULL,
     published_by              BIGINT    NULL COMMENT '最近一次成功发布人',
     published_at              DATETIME  NULL COMMENT '最近一次成功发布时间',
+    is_deleted                TINYINT   NOT NULL DEFAULT 0,
+    deletor_id                BIGINT    NULL,
+    delete_time               DATETIME  NULL,
     PRIMARY KEY (document_id),
-    KEY idx_doc_document_published (is_published, published_at),
-    KEY idx_doc_document_draft_updated (draft_updated_at)
+    KEY idx_doc_document_published (is_published, published_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='文档编辑稿与线上稿双快照';
 ```
 
@@ -289,19 +322,18 @@ CREATE TABLE doc_asset (
     document_id      BIGINT        NOT NULL,
     asset_kind       VARCHAR(16)   NOT NULL COMMENT 'IMAGE或ATTACHMENT',
     status           VARCHAR(16)   NOT NULL COMMENT 'UPLOADING/READY/FAILED/DELETING',
-    storage_key      VARCHAR(512)  NOT NULL COMMENT '服务端生成的私有对象键',
+    storage_key      VARCHAR(500)  NOT NULL COMMENT '服务端生成的私有对象键',
     original_name    VARCHAR(255)  NOT NULL COMMENT '仅用于展示和下载',
-    file_extension   VARCHAR(32)   NOT NULL,
-    mime_type        VARCHAR(128)  NULL COMMENT '服务端检测后的MIME',
-    size_bytes       BIGINT        NULL,
-    checksum_alg     VARCHAR(16)   NULL,
-    checksum         VARCHAR(128)  NULL,
-    failure_code     VARCHAR(64)   NULL,
-    ready_at         DATETIME      NULL,
+    file_extension   VARCHAR(32)   NULL,
+    mime_type        VARCHAR(128)  NOT NULL COMMENT '服务端检测后的MIME',
+    size_bytes       BIGINT        NOT NULL,
     creator_id       BIGINT        NOT NULL,
-    create_time       DATETIME      NOT NULL,
+    create_time      DATETIME      NOT NULL,
     updator_id       BIGINT        NOT NULL,
-    update_time       DATETIME      NOT NULL,
+    update_time      DATETIME      NOT NULL,
+    is_deleted       TINYINT       NOT NULL DEFAULT 0,
+    deletor_id       BIGINT        NULL,
+    delete_time      DATETIME      NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_doc_asset_storage_key (storage_key),
     KEY idx_doc_asset_document_status (document_id, status),
@@ -333,14 +365,17 @@ CREATE TABLE doc_asset_ref (
     asset_id     BIGINT       NOT NULL,
     ref_scope    VARCHAR(16)  NOT NULL COMMENT 'DRAFT或PUBLISHED',
     create_time   DATETIME     NOT NULL,
+    is_deleted    TINYINT      NOT NULL DEFAULT 0,
+    deletor_id    BIGINT       NULL,
+    delete_time   DATETIME     NULL,
     PRIMARY KEY (document_id, asset_id, ref_scope),
     KEY idx_doc_asset_ref_asset (asset_id, ref_scope)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='编辑稿与线上稿资源引用';
 ```
 
-保存草稿时，后端从正文 JSON 中提取 `assetId`，在同一事务内替换该文档全部 DRAFT 引用。客户端不单独提交可信的资源列表，避免正文与资源清单不一致。
+保存草稿时，后端从正文 JSON 中提取 `assetId`，在同一事务内逻辑删除该文档全部 DRAFT 引用，再批量插入或恢复当前引用。客户端不单独提交可信的资源列表，避免正文与资源清单不一致。
 
-发布时执行 `DELETE PUBLISHED` 后再通过 `INSERT ... SELECT` 复制 DRAFT 引用。草稿删除一张仍被线上稿引用的图片时，PUBLISHED 引用仍然存在，对象不会被提前清理。
+发布时同样逻辑删除旧 PUBLISHED 引用，并通过 `INSERT ... SELECT ... ON DUPLICATE KEY UPDATE` 复制或恢复 DRAFT 引用。由于引用关系主键不变，重复发布不会插入重复关系，而是恢复已有逻辑删除行。草稿删除一张仍被线上稿引用的图片时，PUBLISHED 引用仍然存在，对象不会被提前清理。
 
 ### 4.7 `doc_tree_meta`
 
@@ -348,14 +383,18 @@ CREATE TABLE doc_asset_ref (
 CREATE TABLE doc_tree_meta (
     meta_id         TINYINT   NOT NULL,
     tree_revision   BIGINT    NOT NULL,
-    updator_id      BIGINT    NOT NULL,
     update_time      DATETIME  NOT NULL,
+    is_deleted       TINYINT   NOT NULL DEFAULT 0,
+    deletor_id       BIGINT    NULL,
+    delete_time      DATETIME  NULL,
     PRIMARY KEY (meta_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='文档树全局修订号';
 
-INSERT INTO doc_tree_meta(meta_id, tree_revision, updator_id, update_time)
-VALUES (1, 1, 0, NOW());
+INSERT INTO doc_tree_meta(meta_id, tree_revision, update_time)
+VALUES (1, 1, NOW());
 ```
+
+`doc_tree_meta` 是当前基线中的特殊表，不保存创建人/更新人字段，仅保存全局修订号、更新时间和逻辑删除审计字段。
 
 下列操作必须在事务中锁定 `meta_id=1` 并递增 `tree_revision`：
 
@@ -1395,6 +1434,15 @@ GET /api/v1/document-center/documents/19002/assets/19100
 
 只有文档已发布且资源存在对应 PUBLISHED 引用时返回内容。草稿资源、旧线上稿已移除资源、其他文档资源一律返回 404。附件下载审计可以记录文档 ID、资源 ID、用户 ID 和结果，但不记录签名 URL。
 
+### 9.6 用户端文档导出
+
+导出是用户端阅读页的前端能力，不新增后端接口或数据库字段；仅对当前正在阅读且已发布的单篇文档显示入口，管理端编辑和预览不显示。
+
+- **Markdown**：前端使用 `PublishedDocumentDetail.content` Tiptap JSON 生成 Markdown，并以 `{文档标题}.md` 下载。标题、段落、标题层级、加粗、斜体、下划线/删除线降级、链接、行内代码、普通/任务列表、引用、代码块、Mermaid、图片、附件、提示块和表格均需转换；图片和附件保留当前系统在线资源链接，Mermaid 输出为 `mermaid` 代码围栏。
+- **表格**：普通表格输出标准 Markdown pipe table；存在合并单元格、复杂单元格样式或列宽等 Markdown 无法表达的结构时输出 HTML `<table>`，以避免丢失结构。
+- **PDF**：调用浏览器打印能力生成 PDF，不生成服务端文件。打印模式通过 `@media print` 隐藏左侧文档树、右侧目录、导出入口和页面操作区，仅保留文档标题、发布时间和正文；代码块、表格、图片、附件卡片和 Mermaid 尽量复用阅读态样式，背景改白并移除阴影。
+- **文件名**：下载前将 `/ \\ : * ? \" < > |` 等文件名非法字符替换为 `-`，空标题回退为 `document`。
+
 ## 10. 错误协议
 
 ### 10.1 HTTP 状态与业务码
@@ -2169,7 +2217,7 @@ document-center:
 5. 发布期间草稿 revision 改变时拒绝旧发布。
 6. DRAFT 删除资源后，旧 PUBLISHED 引用仍可访问。
 7. 取消发布后正文和资源用户接口同时 404。
-8. 草稿、线上双名称唯一索引在并发下正确报错。
+8. 草稿、线上双名称唯一索引在并发下正确报错；逻辑删除节点在当前索引基线下仍占用原名称，名称复用测试在对应索引迁移完成前应明确标记为不支持。
 9. 树写由 `tree_meta FOR UPDATE` 串行化，不产生环或丢排序。
 10. `LONGTEXT`、utf8mb4、超长中文和 emoji 正确往返。
 11. 唯一索引允许多个未发布文档的 `published_name_key=NULL`。
@@ -2177,6 +2225,7 @@ document-center:
 13. 对象已上传但 READY 更新前中断时，超时 UPLOADING 记录和对象可被清理；新重试使用新资源 ID。
 14. 同一草稿取消发布后重新发布时 `publicationVersion` 继续递增，旧 `expectedPublicationVersion` 不能取消新发布。
 15. 归一化标题搜索对 `API`/`api` 一致，并正确处理 `%`、`_` 和反斜线。
+16. 五张业务表的 `is_deleted/deletor_id/delete_time` 均能正确写入，默认查询不会返回逻辑删除数据。
 
 父 POM 的 Surefire 2.18.1 与 `skipTests=true` 是门禁风险。进入开发前必须确认一条真正执行 JUnit 的命令，并在 CI 校验测试报告数量大于零；“Maven 构建成功”不能作为测试已运行的证据。
 
