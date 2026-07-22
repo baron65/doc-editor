@@ -19,7 +19,7 @@ const schemaSource = readFileSync(new URL('../editor/documentSchemaExtensions.ts
 
 test('阅读页只在宽屏常驻紧凑文档树', () => {
   assert.match(treeSource, /className="[^"\n]*hidden[^"\n]*w-52[^"\n]*shrink-0[^"\n]*lg:block[^"\n]*xl:w-56/);
-  assert.match(treeSource, /sticky top-8[^"\n]*max-h-\[calc\(100vh-4rem\)\][^"\n]*overflow-y-auto/);
+  assert.match(treeSource, /hidden h-full max-h-full[^"\n]*overflow-y-auto/);
   assert.doesNotMatch(treeSource, /hidden w-72 shrink-0 lg:block/);
 });
 
@@ -31,6 +31,7 @@ test('用户端三栏固定在视口内且仅正文区域独立滚动', () => {
   assert.match(pageSource, /h-screen[^"\n]*overflow-hidden/);
   assert.match(pageSource, /h-full min-h-0 min-w-0 flex-1 overflow-hidden/);
   assert.match(pageSource, /<DocumentReader[\s\S]*?containedScroll/);
+  assert.match(pageSource, /<DocumentReader[\s\S]*?showExportActions/);
   assert.match(treeSource, /hidden h-full max-h-full[^"\n]*overflow-y-auto/);
 });
 
@@ -140,4 +141,20 @@ test('表格开启列宽拖动并提供清晰的编辑反馈', () => {
   assert.match(globalStyles, /\.column-resize-handle/);
   assert.match(globalStyles, /\.resize-cursor/);
   assert.match(globalStyles, /\.selectedCell::after/);
+});
+
+test('用户端导出操作和导航目录在打印 PDF 时隐藏', () => {
+  assert.match(readerSource, /document-reader-export-actions/);
+  assert.match(readerSource, /document-reader-export-menu/);
+  assert.match(readerSource, /aria-label="导出文档"/);
+  assert.match(readerSource, /aria-expanded=\{exportMenuOpen\}/);
+  assert.doesNotMatch(readerSource, /group-hover:visible|group-hover:opacity-100/);
+  assert.match(readerSource, /document-reader-navigation/);
+  assert.match(readerSource, /data-document-reader-toc="true"/);
+  assert.match(treeSource, /data-desktop-document-tree="true"/);
+  assert.match(treeSource, /data-mobile-document-tree="true"/);
+  assert.match(globalStyles, /@media print/);
+  assert.match(globalStyles, /\.document-reader-export-actions,[\s\S]*?\.document-reader-navigation\s*\{[\s\S]*?display:\s*none !important/);
+  assert.match(globalStyles, /\[data-document-reader-toc='true'\]/);
+  assert.match(globalStyles, /background:\s*#ffffff !important/);
 });

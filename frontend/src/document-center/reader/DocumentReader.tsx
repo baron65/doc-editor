@@ -6,6 +6,7 @@ import { buildReaderContent, selectActiveHeadingId, type DocumentNavigationItem 
 import { CodeBlock } from './CodeBlock';
 import { buildBlockTextStyle, normalizeFontSize, normalizeTextBackgroundColor, normalizeTextColor } from '../content/blockFormatting';
 import { extractDocumentText, isMermaidLanguage } from '../content/mermaidContent';
+import { downloadMarkdown, printDocumentAsPdf } from '../export/documentExport';
 
 export interface ReaderDocument {
   documentId: string;
@@ -20,6 +21,7 @@ interface DocumentReaderProps {
   previous?: DocumentNavigationItem;
   next?: DocumentNavigationItem;
   containedScroll?: boolean;
+  showExportActions?: boolean;
 }
 
 export function DocumentReader({
@@ -28,13 +30,16 @@ export function DocumentReader({
   previous,
   next,
   containedScroll = false,
+  showExportActions = false,
 }: DocumentReaderProps) {
   const articleRef = useRef<HTMLElement>(null);
+  const exportActionsRef = useRef<HTMLDivElement>(null);
   const readerContent = useMemo(
     () => buildReaderContent(document?.content ?? { type: 'doc', content: [] }),
     [document?.content],
   );
   const [activeHeadingId, setActiveHeadingId] = useState<string>();
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   useEffect(() => {
     setActiveHeadingId(readerContent.headings[0]?.id);
@@ -68,6 +73,20 @@ export function DocumentReader({
       }
     };
   }, [readerContent.headings]);
+
+  useEffect(() => {
+    if (!exportMenuOpen) {
+      return undefined;
+    }
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (!exportActionsRef.current?.contains(event.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    globalThis.document.addEventListener('pointerdown', closeOnOutsidePointerDown);
+    return () => globalThis.document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+  }, [exportMenuOpen]);
+
   if (!document) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
@@ -85,14 +104,68 @@ export function DocumentReader({
         }`}
       >
         <h1 className="mb-2 text-3xl font-semibold text-gray-950">{document.title}</h1>
-        {document.publishedAt ? (
-          <div className="mb-6 text-xs text-gray-400">最后发布：{formatPublishedAt(document.publishedAt)}</div>
-        ) : <div className="mb-4" />}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          {document.publishedAt ? (
+            <div className="text-xs text-gray-400">最后发布：{formatPublishedAt(document.publishedAt)}</div>
+          ) : <div className="text-xs text-gray-400" />}
+          {showExportActions ? (
+            <div ref={exportActionsRef} className="document-reader-export-actions relative">
+              <button
+                className="flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                type="button"
+                aria-label="导出文档"
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+                title="导出文档"
+                onClick={() => setExportMenuOpen((open) => !open)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setExportMenuOpen(false);
+                  }
+                }}
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 3v10.5m0 0 4-4m-4 4-4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 14.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+              <div
+                className={`document-reader-export-menu absolute right-0 top-full z-20 mt-2 w-36 rounded-lg border border-gray-200 bg-white p-1.5 text-sm text-gray-700 shadow-lg transition ${
+                  exportMenuOpen ? 'visible opacity-100' : 'invisible opacity-0'
+                }`}
+                role="menu"
+              >
+                <button
+                  className="block w-full rounded-md px-3 py-2 text-left hover:bg-brand-50 hover:text-brand-700"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    downloadMarkdown(document);
+                    setExportMenuOpen(false);
+                  }}
+                >
+                  导出 Markdown
+                </button>
+                <button
+                  className="block w-full rounded-md px-3 py-2 text-left hover:bg-brand-50 hover:text-brand-700"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    printDocumentAsPdf();
+                    setExportMenuOpen(false);
+                  }}
+                >
+                  导出 PDF
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
         <div className="document-body document-content-body">
           {renderChildren(readerContent.content.content, document.documentId, assetScope)}
         </div>
         {previous || next ? (
-          <nav className="mt-10 grid grid-cols-2 gap-4 border-t border-gray-100 pt-6" aria-label="文档前后篇导航">
+          <nav className="document-reader-navigation mt-10 grid grid-cols-2 gap-4 border-t border-gray-100 pt-6" aria-label="文档前后篇导航">
             <NavigationLink direction="previous" item={previous} />
             <NavigationLink direction="next" item={next} />
           </nav>
@@ -100,6 +173,7 @@ export function DocumentReader({
       </article>
       {readerContent.headings.length ? (
         <aside
+          data-document-reader-toc="true"
           className={`sticky top-0 hidden w-52 shrink-0 overflow-y-auto rounded-xl bg-white p-4 text-sm shadow-sm xl:block ${
             containedScroll ? 'max-h-full' : 'max-h-[calc(100vh-4rem)]'
           }`}

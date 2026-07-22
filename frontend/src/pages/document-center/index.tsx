@@ -94,6 +94,7 @@ export default function DocumentCenterPage() {
             document={document}
             previous={navigation.previous}
             next={navigation.next}
+            showExportActions
           />
         ) : (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">

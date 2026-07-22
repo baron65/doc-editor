@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DocumentReader } from './DocumentReader';
+import { DocumentReader, type ReaderDocument } from './DocumentReader';
 
 test('Reader 将结构化表格渲染为可读 HTML 表格', () => {
   const html = renderToStaticMarkup(
@@ -151,6 +151,29 @@ test('Reader 展示发布时间、页内目录和前后篇导航', () => {
   assert.match(html, /href="#使用说明"/);
   assert.match(html, /href="\/document-center\/11"/);
   assert.match(html, /href="\/document-center\/13"/);
+});
+
+test('Reader 仅在用户端阅读页按需展示导出操作', () => {
+  const baseDocument: ReaderDocument = {
+    documentId: 'exportable',
+    title: '可导出文档',
+    publishedAt: '2026-07-12T09:00:00+08:00',
+    content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '正文' }] }],
+    },
+  };
+
+  const defaultHtml = renderToStaticMarkup(<DocumentReader document={baseDocument} />);
+  const exportHtml = renderToStaticMarkup(<DocumentReader document={baseDocument} showExportActions />);
+
+  assert.doesNotMatch(defaultHtml, /导出 Markdown/);
+  assert.match(exportHtml, /document-reader-export-actions/);
+  assert.match(exportHtml, /aria-label="导出文档"/);
+  assert.match(exportHtml, /aria-expanded="false"/);
+  assert.match(exportHtml, /document-reader-export-menu/);
+  assert.match(exportHtml, /导出 Markdown/);
+  assert.match(exportHtml, /导出 PDF/);
 });
 
 test('Reader 在弹框容器内约束正文和目录滚动高度', () => {

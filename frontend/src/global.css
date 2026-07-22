@@ -234,6 +234,52 @@ body {
   line-height: 1.5;
 }
 
+@media print {
+  html,
+  body,
+  #root {
+    height: auto !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  [data-desktop-document-tree='true'],
+  [data-mobile-document-tree='true'],
+  [data-document-reader-toc='true'],
+  .document-reader-export-actions,
+  .document-reader-navigation {
+    display: none !important;
+  }
+
+  main,
+  section,
+  .document-content {
+    height: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  .document-content {
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .document-body {
+    color: #111827 !important;
+  }
+
+  .document-table-wrapper,
+  .document-body pre,
+  .mermaid-renderer {
+    break-inside: avoid;
+  }
+}
+
 .document-body .document-image {
   margin: 1rem 0;
 }

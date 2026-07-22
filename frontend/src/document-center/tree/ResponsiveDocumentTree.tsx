@@ -20,6 +20,7 @@ export function ResponsiveDocumentTree({ nodes, activeDocumentId, onSelect }: Re
   return (
     <>
       <button
+        data-mobile-document-tree="true"
         className="fixed bottom-5 left-5 z-30 rounded-full bg-brand-500 px-4 py-3 text-sm text-white shadow-lg lg:hidden"
         type="button"
         onClick={() => setOpen(true)}
@@ -46,7 +47,7 @@ export function ResponsiveDocumentTree({ nodes, activeDocumentId, onSelect }: Re
             type="button"
             onClick={() => setOpen(false)}
           />
-          <aside className="relative h-full w-[min(86vw,20rem)] overflow-y-auto bg-white p-6 shadow-xl">
+          <aside data-mobile-document-tree="true" className="relative h-full w-[min(86vw,20rem)] overflow-y-auto bg-white p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h1 className="text-xl font-semibold text-gray-950">文档中心</h1>
               <button className="rounded-md border border-gray-200 px-3 py-1.5 text-sm" type="button" onClick={() => setOpen(false)}>
