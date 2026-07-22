@@ -41,14 +41,14 @@ export function CodeBlock({ code, language }: { code: string; language?: string 
   };
 
   return (
-    <section className="my-5 overflow-hidden rounded-lg border border-[#3c3c3c] bg-[#1e1e1e] [font-family:Consolas,'Courier_New',monospace]" data-code-language={normalizedLanguage}>
+    <section className="code-block-renderer my-5 overflow-hidden rounded-lg border border-[#3c3c3c] bg-[#1e1e1e] [font-family:Consolas,'Courier_New',monospace]" data-code-language={normalizedLanguage}>
       <header className="flex items-center justify-between border-b border-[#3c3c3c] bg-[#252526] px-4 py-2 text-xs text-[#cccccc]">
         <span>{normalizedLanguage}</span>
         <button className="rounded px-2 py-1 text-gray-300 hover:bg-gray-800 hover:text-white" type="button" onClick={() => void copy()}>
           {copyState === 'copied' ? '已复制' : copyState === 'failed' ? '复制失败' : '复制'}
         </button>
       </header>
-      <div className="flex min-w-0 bg-[#1e1e1e]">
+      <div className="code-block-body flex min-w-0 bg-[#1e1e1e]">
         <ol aria-hidden="true" className="code-line-numbers m-0 list-none shrink-0 select-none border-r border-[#3c3c3c] bg-[#1e1e1e] py-4 pr-3 text-right text-sm leading-6 text-[#858585]">
           {lineNumbers.map((lineNumber) => <li key={lineNumber}>{lineNumber}</li>)}
         </ol>

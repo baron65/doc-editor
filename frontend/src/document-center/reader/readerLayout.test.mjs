@@ -144,6 +144,7 @@ test('表格开启列宽拖动并提供清晰的编辑反馈', () => {
 });
 
 test('用户端导出操作和导航目录在打印 PDF 时隐藏', () => {
+  assert.match(readerSource, /document-reader-layout/);
   assert.match(readerSource, /document-reader-export-actions/);
   assert.match(readerSource, /document-reader-export-menu/);
   assert.match(readerSource, /aria-label="导出文档"/);
@@ -157,4 +158,38 @@ test('用户端导出操作和导航目录在打印 PDF 时隐藏', () => {
   assert.match(globalStyles, /\.document-reader-export-actions,[\s\S]*?\.document-reader-navigation\s*\{[\s\S]*?display:\s*none !important/);
   assert.match(globalStyles, /\[data-document-reader-toc='true'\]/);
   assert.match(globalStyles, /background:\s*#ffffff !important/);
+});
+
+test('PDF 打印态解除滚动容器裁切并尽量保留阅读视觉', () => {
+  assert.match(globalStyles, /@page\s*\{[\s\S]*?margin:\s*14mm/);
+  assert.match(globalStyles, /\.document-reader-layout\s*\{[\s\S]*?display:\s*block !important/);
+  assert.match(globalStyles, /\.document-reader-layout\s*\{[\s\S]*?overflow:\s*visible !important/);
+  assert.match(globalStyles, /\.document-content\s*\{[\s\S]*?width:\s*100% !important/);
+  assert.match(globalStyles, /\.document-body\s*\{[\s\S]*?font-size:\s*12pt/);
+  assert.match(globalStyles, /print-color-adjust:\s*exact/);
+  assert.match(globalStyles, /\.document-body pre\s*\{[\s\S]*?white-space:\s*pre-wrap/);
+  assert.match(globalStyles, /\.document-body table\s*\{[\s\S]*?page-break-inside:\s*avoid/);
+});
+
+test('PDF 打印态将 Mermaid 流程图完整缩放到单页内', () => {
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.mermaid-renderer\s*\{[^}]*overflow:\s*visible !important/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.mermaid-renderer svg\s*\{[^}]*max-height:\s*220mm !important/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.mermaid-renderer svg\s*\{[^}]*width:\s*auto !important/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.mermaid-renderer svg\s*\{[^}]*margin:\s*0 auto !important/);
+});
+
+test('PDF 打印态允许长代码块自然跨页，避免整块前置留白', () => {
+  assert.match(codeBlockSource, /code-block-renderer/);
+  assert.match(codeBlockSource, /code-block-body/);
+  assert.doesNotMatch(globalStyles, /\.document-table-wrapper,\s*\.document-body pre,/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.code-block-renderer\s*\{[^}]*break-inside:\s*auto/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.code-block-renderer > \.code-block-body\s*\{[^}]*display:\s*block !important/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.code-block-renderer pre\s*\{[^}]*break-inside:\s*auto !important/);
+});
+
+test('PDF 打印态代码块各层使用一致圆角，内部背景不会露出尖角', () => {
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.code-block-renderer\s*\{[^}]*border-radius:\s*0\.5rem !important/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.code-block-renderer > header\s*\{[^}]*border-radius:\s*0\.5rem 0\.5rem 0 0 !important/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.code-block-renderer > \.code-block-body\s*\{[^}]*border-radius:\s*0 0 0\.5rem 0\.5rem !important/);
+  assert.match(globalStyles, /@media print\s*\{[\s\S]*?\.code-block-renderer pre\s*\{[^}]*border-radius:\s*0 0 0\.5rem 0\.5rem !important/);
 });

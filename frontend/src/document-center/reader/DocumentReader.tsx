@@ -96,7 +96,7 @@ export function DocumentReader({
   }
 
   return (
-    <div className={`flex min-w-0 items-start gap-4 xl:gap-6 ${containedScroll ? 'h-full overflow-hidden' : ''}`}>
+    <div className={`document-reader-layout flex min-w-0 items-start gap-4 xl:gap-6 ${containedScroll ? 'h-full overflow-hidden' : ''}`}>
       <article
         ref={articleRef}
         className={`document-content min-w-0 flex-1 rounded-xl bg-white p-5 shadow-sm sm:p-6 lg:p-8 ${
