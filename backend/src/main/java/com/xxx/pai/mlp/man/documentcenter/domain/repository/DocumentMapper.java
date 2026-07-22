@@ -17,8 +17,8 @@ public interface DocumentMapper extends BaseMapper<DocumentPO> {
             @Param("expectedDraftRevision") Long expectedDraftRevision,
             @Param("schemaVersion") Integer schemaVersion,
             @Param("contentJson") String contentJson,
-            @Param("updatedBy") Long updatedBy,
-            @Param("updatedAt") LocalDateTime updatedAt);
+            @Param("updatorId") Long updatorId,
+            @Param("updateTime") LocalDateTime updateTime);
 
     int publishIfRevisionsMatch(
             @Param("documentId") Long documentId,

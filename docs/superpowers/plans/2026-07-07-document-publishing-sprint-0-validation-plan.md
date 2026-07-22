@@ -253,7 +253,7 @@ Expected:
 Run equivalent SQL in the target test database:
 
 ```sql
-INSERT INTO doc_node(id, parent_id, node_type, draft_name, draft_name_key, published_name, published_name_key, sort_order, node_version, created_by, created_at, updated_by, updated_at)
+INSERT INTO doc_node(id, parent_id, node_type, draft_name, draft_name_key, published_name, published_name_key, sort_order, node_version, creator_id, create_time, updator_id, update_time)
 VALUES
   (1001, 0, 'DOCUMENT', '草稿A', '草稿a', NULL, NULL, 10, 1, 1, NOW(), 1, NOW()),
   (1002, 0, 'DOCUMENT', '草稿B', '草稿b', NULL, NULL, 20, 1, 1, NOW(), 1, NOW());
@@ -266,8 +266,8 @@ VALUES
 UPDATE doc_node
 SET published_name = draft_name,
     published_name_key = draft_name_key,
-    updated_by = 1,
-    updated_at = NOW()
+    updator_id = 1,
+    update_time = NOW()
 WHERE id = 1001;
 
 UPDATE doc_document
@@ -294,17 +294,17 @@ Expected:
 Run equivalent SQL:
 
 ```sql
-INSERT INTO doc_asset(id, document_id, asset_kind, status, storage_key, original_name, file_extension, mime_type, size_bytes, created_by, created_at, updated_by, updated_at)
+INSERT INTO doc_asset(id, document_id, asset_kind, status, storage_key, original_name, file_extension, mime_type, size_bytes, creator_id, create_time, updator_id, update_time)
 VALUES (2001, 1001, 'IMAGE', 'READY', 'doc-center/test/2001.png', 'a.png', 'png', 'image/png', 10, 1, NOW(), 1, NOW());
 
-INSERT INTO doc_asset_ref(document_id, asset_id, ref_scope, created_at)
+INSERT INTO doc_asset_ref(document_id, asset_id, ref_scope, create_time)
 VALUES (1001, 2001, 'DRAFT', NOW());
 
 DELETE FROM doc_asset_ref
 WHERE document_id = 1001
   AND ref_scope = 'PUBLISHED';
 
-INSERT INTO doc_asset_ref(document_id, asset_id, ref_scope, created_at)
+INSERT INTO doc_asset_ref(document_id, asset_id, ref_scope, create_time)
 SELECT document_id, asset_id, 'PUBLISHED', NOW()
 FROM doc_asset_ref
 WHERE document_id = 1001
@@ -439,7 +439,7 @@ Expected:
 Run:
 
 ```bash
-rg -n 'IdGenerator|Snowflake|nextId|createdBy|createdAt|updatedBy|updatedAt|MetaObjectHandler|Auditor' .
+rg -n 'IdGenerator|Snowflake|nextId|creatorId|createTime|updatorId|updateTime|MetaObjectHandler|Auditor' .
 ```
 
 Expected:

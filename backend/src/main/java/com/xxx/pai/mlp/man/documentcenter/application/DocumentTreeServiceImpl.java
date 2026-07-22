@@ -125,10 +125,10 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         node.setPublishedNameKey(normalizedName);
         node.setSortOrder(nextSortOrder(dto.getParentId()));
         node.setNodeVersion(1L);
-        node.setCreatedBy(SYSTEM_USER_ID);
-        node.setCreatedAt(now);
-        node.setUpdatedBy(SYSTEM_USER_ID);
-        node.setUpdatedAt(now);
+        node.setCreatorId(SYSTEM_USER_ID);
+        node.setCreateTime(now);
+        node.setUpdatorId(SYSTEM_USER_ID);
+        node.setUpdateTime(now);
         documentNodeMapper.insert(node);
         reorderNewNode(node, dto.getTargetIndex(), now);
 
@@ -163,10 +163,10 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         node.setPublishedNameKey(null);
         node.setSortOrder(nextSortOrder(dto.getParentId()));
         node.setNodeVersion(1L);
-        node.setCreatedBy(SYSTEM_USER_ID);
-        node.setCreatedAt(now);
-        node.setUpdatedBy(SYSTEM_USER_ID);
-        node.setUpdatedAt(now);
+        node.setCreatorId(SYSTEM_USER_ID);
+        node.setCreateTime(now);
+        node.setUpdatorId(SYSTEM_USER_ID);
+        node.setUpdateTime(now);
         documentNodeMapper.insert(node);
         reorderNewNode(node, dto.getTargetIndex(), now);
 
@@ -211,8 +211,8 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         node.setPublishedName(dto.getName().trim());
         node.setPublishedNameKey(normalizedName);
         node.setNodeVersion(node.getNodeVersion() + 1);
-        node.setUpdatedBy(SYSTEM_USER_ID);
-        node.setUpdatedAt(now);
+        node.setUpdatorId(SYSTEM_USER_ID);
+        node.setUpdateTime(now);
         documentNodeMapper.updateById(node);
 
         long newTreeRevision = bumpTreeRevision(treeMeta);
@@ -597,8 +597,8 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
             sibling.setParentId(parentId);
             sibling.setSortOrder((index + 1) * 10);
             sibling.setNodeVersion(sibling.getNodeVersion() + 1);
-            sibling.setUpdatedBy(SYSTEM_USER_ID);
-            sibling.setUpdatedAt(now);
+            sibling.setUpdatorId(SYSTEM_USER_ID);
+            sibling.setUpdateTime(now);
             documentNodeMapper.updateById(sibling);
         }
     }
@@ -665,7 +665,7 @@ public class DocumentTreeServiceImpl implements DocumentTreeService {
         DocumentTreeMetaPO initialMeta = new DocumentTreeMetaPO();
         initialMeta.setMetaId(ROOT_META_ID);
         initialMeta.setTreeRevision(0L);
-        initialMeta.setUpdatedAt(LocalDateTime.now());
+        initialMeta.setUpdateTime(LocalDateTime.now());
         documentTreeMetaMapper.insert(initialMeta);
         return initialMeta;
     }

@@ -15,8 +15,8 @@
         SET draft_schema_version = #{schemaVersion},
             draft_content_json = #{contentJson},
             draft_revision = draft_revision + 1,
-            draft_updated_by = #{updatedBy},
-            draft_updated_at = #{updatedAt}
+            draft_updated_by = #{updatorId},
+            draft_updated_at = #{updateTime}
         WHERE document_id = #{documentId}
           AND is_deleted = 0
           AND draft_revision = #{expectedDraftRevision}

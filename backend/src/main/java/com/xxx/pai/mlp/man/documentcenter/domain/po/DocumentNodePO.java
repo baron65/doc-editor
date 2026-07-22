@@ -18,10 +18,10 @@ public class DocumentNodePO {
     private String publishedNameKey;
     private Integer sortOrder;
     private Long nodeVersion;
-    private Long createdBy;
-    private LocalDateTime createdAt;
-    private Long updatedBy;
-    private LocalDateTime updatedAt;
+    private Long creatorId;
+    private LocalDateTime createTime;
+    private Long updatorId;
+    private LocalDateTime updateTime;
     @TableLogic(value = "0", delval = "1")
     private Integer isDeleted;
     private Long deletorId;
@@ -99,36 +99,36 @@ public class DocumentNodePO {
         this.nodeVersion = nodeVersion;
     }
 
-    public Long getCreatedBy() {
-        return createdBy;
+    public Long getCreatorId() {
+        return creatorId;
     }
 
-    public void setCreatedBy(Long createdBy) {
-        this.createdBy = createdBy;
+    public void setCreatorId(Long creatorId) {
+        this.creatorId = creatorId;
     }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+    public LocalDateTime getCreateTime() {
+        return createTime;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
+    public void setCreateTime(LocalDateTime createTime) {
+        this.createTime = createTime;
     }
 
-    public Long getUpdatedBy() {
-        return updatedBy;
+    public Long getUpdatorId() {
+        return updatorId;
     }
 
-    public void setUpdatedBy(Long updatedBy) {
-        this.updatedBy = updatedBy;
+    public void setUpdatorId(Long updatorId) {
+        this.updatorId = updatorId;
     }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
+    public LocalDateTime getUpdateTime() {
+        return updateTime;
     }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
+    public void setUpdateTime(LocalDateTime updateTime) {
+        this.updateTime = updateTime;
     }
 
     public Integer getIsDeleted() {

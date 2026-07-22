@@ -119,7 +119,7 @@ class DocumentDraftServiceImplTest {
                 .allSatisfy(ref -> {
                     assertThat(ref.getDocumentId()).isEqualTo(documentId);
                     assertThat(ref.getRefScope()).isEqualTo("DRAFT");
-                    assertThat(ref.getCreatedAt()).isNotNull();
+                    assertThat(ref.getCreateTime()).isNotNull();
                 });
         assertThat(operation.getDraftRevision()).isEqualTo("4");
     }

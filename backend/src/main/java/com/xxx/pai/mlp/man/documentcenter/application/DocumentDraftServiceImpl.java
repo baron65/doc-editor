@@ -137,8 +137,8 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
         node.setDraftName(dto.getTitle().trim());
         node.setDraftNameKey(normalizedTitle);
         node.setNodeVersion(node.getNodeVersion() + 1);
-        node.setUpdatedBy(SYSTEM_USER_ID);
-        node.setUpdatedAt(now);
+        node.setUpdatorId(SYSTEM_USER_ID);
+        node.setUpdateTime(now);
         documentNodeMapper.updateById(node);
 
         long nextDraftRevision = document.getDraftRevision() + 1;
@@ -231,7 +231,7 @@ public class DocumentDraftServiceImpl implements DocumentDraftService {
                     ref.setDocumentId(documentId);
                     ref.setAssetId(assetId);
                     ref.setRefScope(REF_SCOPE_DRAFT);
-                    ref.setCreatedAt(now);
+                    ref.setCreateTime(now);
                     return ref;
                 })
                 .collect(Collectors.toList());

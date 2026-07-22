@@ -67,8 +67,8 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
         node.setPublishedName(node.getDraftName());
         node.setPublishedNameKey(publishedNameKey);
         node.setNodeVersion(node.getNodeVersion() + 1);
-        node.setUpdatedBy(SYSTEM_USER_ID);
-        node.setUpdatedAt(now);
+        node.setUpdatorId(SYSTEM_USER_ID);
+        node.setUpdateTime(now);
         documentNodeMapper.updateById(node);
 
         int publishedRows = documentMapper.publishIfRevisionsMatch(
@@ -121,8 +121,8 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
         node.setPublishedName(null);
         node.setPublishedNameKey(null);
         node.setNodeVersion(node.getNodeVersion() + 1);
-        node.setUpdatedBy(SYSTEM_USER_ID);
-        node.setUpdatedAt(now);
+        node.setUpdatorId(SYSTEM_USER_ID);
+        node.setUpdateTime(now);
         documentNodeMapper.updateById(node);
 
         int unpublishedRows = documentMapper.unpublishIfPublicationVersionMatches(
@@ -193,7 +193,7 @@ public class DocumentPublishServiceImpl implements DocumentPublishService {
             treeMeta = new DocumentTreeMetaPO();
             treeMeta.setMetaId(ROOT_META_ID);
             treeMeta.setTreeRevision(0L);
-            treeMeta.setUpdatedAt(LocalDateTime.now());
+            treeMeta.setUpdateTime(LocalDateTime.now());
             documentTreeMetaMapper.insert(treeMeta);
         }
         long newRevision = treeMeta.getTreeRevision() + 1;

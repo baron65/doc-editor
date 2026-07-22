@@ -67,14 +67,16 @@ pnpm start
 - MinIO 本地账号为 `document-center` / `document-center-secret`，bucket 默认由后端启动时自动创建为 `document-center`。
 - 后端和前端开发时在本地启动；生产环境使用独立应用镜像和 `docker-compose.prod.yml`。
 
-已有数据库升级到逻辑删除结构时，需要在部署新版后端前执行一次迁移：
+已有数据库升级时，需要在部署新版后端前按顺序执行迁移：
 
 ```bash
 mysql -h <host> -u <user> -p document_center \
   < backend/src/main/resources/db/migration/V2__document_center_logical_delete.sql
+mysql -h <host> -u <user> -p document_center \
+  < backend/src/main/resources/db/migration/V3__document_center_audit_column_names.sql
 ```
 
-新建数据库无需单独执行迁移，`schema.sql` 已包含逻辑删除字段。
+新建数据库无需单独执行迁移，`schema.sql` 已包含最新字段结构。
 
 ## 腾讯云生产部署
 

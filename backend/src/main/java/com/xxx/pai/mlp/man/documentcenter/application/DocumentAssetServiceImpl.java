@@ -83,10 +83,10 @@ public class DocumentAssetServiceImpl implements DocumentAssetService {
         assetPO.setFileExtension(resolveFileExtension(assetPO.getOriginalName()));
         assetPO.setMimeType(contentType);
         assetPO.setSizeBytes(storedObject.getSizeBytes());
-        assetPO.setCreatedBy(SYSTEM_USER_ID);
-        assetPO.setCreatedAt(now);
-        assetPO.setUpdatedBy(SYSTEM_USER_ID);
-        assetPO.setUpdatedAt(now);
+        assetPO.setCreatorId(SYSTEM_USER_ID);
+        assetPO.setCreateTime(now);
+        assetPO.setUpdatorId(SYSTEM_USER_ID);
+        assetPO.setUpdateTime(now);
         documentAssetMapper.insert(assetPO);
 
         DocumentAssetVO asset = new DocumentAssetVO();

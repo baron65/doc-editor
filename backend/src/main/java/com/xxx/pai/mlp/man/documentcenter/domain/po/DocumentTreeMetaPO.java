@@ -11,7 +11,7 @@ public class DocumentTreeMetaPO {
     @TableId
     private Integer metaId;
     private Long treeRevision;
-    private LocalDateTime updatedAt;
+    private LocalDateTime updateTime;
     @TableLogic(value = "0", delval = "1")
     private Integer isDeleted;
     private Long deletorId;
@@ -33,12 +33,12 @@ public class DocumentTreeMetaPO {
         this.treeRevision = treeRevision;
     }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
+    public LocalDateTime getUpdateTime() {
+        return updateTime;
     }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
+    public void setUpdateTime(LocalDateTime updateTime) {
+        this.updateTime = updateTime;
     }
 
     public Integer getIsDeleted() {

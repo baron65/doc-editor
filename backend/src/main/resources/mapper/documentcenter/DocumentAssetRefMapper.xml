@@ -13,15 +13,15 @@
 
     <insert id="insertBatch">
         INSERT INTO doc_asset_ref (
-            document_id, asset_id, ref_scope, created_at,
+            document_id, asset_id, ref_scope, create_time,
             is_deleted, deletor_id, delete_time
         )
         VALUES
         <foreach collection="refs" item="ref" separator=",">
-            (#{ref.documentId}, #{ref.assetId}, #{ref.refScope}, #{ref.createdAt}, 0, NULL, NULL)
+            (#{ref.documentId}, #{ref.assetId}, #{ref.refScope}, #{ref.createTime}, 0, NULL, NULL)
         </foreach>
         ON DUPLICATE KEY UPDATE
-            created_at = VALUES(created_at),
+            create_time = VALUES(create_time),
             is_deleted = 0,
             deletor_id = NULL,
             delete_time = NULL
@@ -29,7 +29,7 @@
 
     <insert id="copyDraftRefsToPublished">
         INSERT INTO doc_asset_ref (
-            document_id, asset_id, ref_scope, created_at,
+            document_id, asset_id, ref_scope, create_time,
             is_deleted, deletor_id, delete_time
         )
         SELECT document_id, asset_id, 'PUBLISHED', NOW(), 0, NULL, NULL
@@ -38,7 +38,7 @@
           AND ref_scope = 'DRAFT'
           AND is_deleted = 0
         ON DUPLICATE KEY UPDATE
-            created_at = VALUES(created_at),
+            create_time = VALUES(create_time),
             is_deleted = 0,
             deletor_id = NULL,
             delete_time = NULL

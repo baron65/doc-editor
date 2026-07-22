@@ -10,5 +10,5 @@ public interface DocumentTreeMetaMapper extends BaseMapper<DocumentTreeMetaPO> {
     int incrementRevisionIfMatches(
             @Param("metaId") Integer metaId,
             @Param("expectedTreeRevision") Long expectedTreeRevision,
-            @Param("updatedAt") LocalDateTime updatedAt);
+            @Param("updateTime") LocalDateTime updateTime);
 }

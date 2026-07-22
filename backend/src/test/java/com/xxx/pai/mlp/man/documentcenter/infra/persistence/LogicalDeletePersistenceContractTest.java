@@ -37,6 +37,26 @@ class LogicalDeletePersistenceContractTest {
     }
 
     @Test
+    void auditColumnNamesFollowCompanyConvention() throws IOException {
+        String schema = readClasspathResource("db/schema.sql");
+        String migration = readClasspathResource("db/migration/V3__document_center_audit_column_names.sql");
+
+        assertThat(schema)
+                .contains("creator_id", "create_time", "updator_id", "update_time")
+                .doesNotContain(
+                        "\n    created_by",
+                        "\n    created_at",
+                        "\n    updated_by",
+                        "\n    updated_at");
+        assertThat(migration)
+                .contains(
+                        "CHANGE COLUMN created_by creator_id",
+                        "CHANGE COLUMN created_at create_time",
+                        "CHANGE COLUMN updated_by updator_id",
+                        "CHANGE COLUMN updated_at update_time");
+    }
+
+    @Test
     void everyPersistenceObjectMarksIsDeletedAsTableLogic() throws NoSuchFieldException {
         for (Class<?> poClass : DOCUMENT_TABLE_POS) {
             TableLogic tableLogic = poClass.getDeclaredField("isDeleted").getAnnotation(TableLogic.class);
@@ -57,6 +77,23 @@ class LogicalDeletePersistenceContractTest {
         assertThat(mapper).doesNotContain("DELETE FROM doc_asset_ref");
         assertThat(mapper).contains("is_deleted = 1", "deletor_id", "delete_time");
         assertThat(countOccurrences(mapper, "is_deleted = 0")).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
+    void deletedNodeNamesAreReleasedWithoutWeakeningActiveNameUniqueness() throws IOException {
+        String schema = readClasspathResource("db/schema.sql");
+        String mapper = readClasspathResource("mapper/documentcenter/DocumentNodeMapper.xml");
+
+        assertThat(schema)
+                .contains(
+                        "UNIQUE KEY uk_doc_node_parent_draft_name (parent_id, draft_name_key)",
+                        "UNIQUE KEY uk_doc_node_parent_published_name (parent_id, published_name_key)");
+        assertThat(mapper)
+                .contains(
+                        "draft_name_key = CONCAT('#deleted#', id)",
+                        "ELSE CONCAT('#deleted#', id)",
+                        "WHERE id = #{nodeId}",
+                        "AND is_deleted = 0");
     }
 
     private static String readClasspathResource(String path) throws IOException {

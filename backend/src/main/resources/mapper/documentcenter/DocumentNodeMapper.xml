@@ -18,7 +18,7 @@
     <select id="searchPublishedByNameKey" resultType="com.xxx.pai.mlp.man.documentcenter.domain.po.DocumentNodePO">
         SELECT id, parent_id, node_type, draft_name, draft_name_key,
                published_name, published_name_key, sort_order, node_version,
-               created_by, created_at, updated_by, updated_at
+               creator_id, create_time, updator_id, update_time
         FROM doc_node
         WHERE node_type = 'DOCUMENT'
           AND is_deleted = 0

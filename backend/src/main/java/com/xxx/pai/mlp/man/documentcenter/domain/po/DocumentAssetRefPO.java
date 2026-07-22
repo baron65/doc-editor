@@ -10,7 +10,7 @@ public class DocumentAssetRefPO {
     private Long documentId;
     private Long assetId;
     private String refScope;
-    private LocalDateTime createdAt;
+    private LocalDateTime createTime;
     @TableLogic(value = "0", delval = "1")
     private Integer isDeleted;
     private Long deletorId;
@@ -40,12 +40,12 @@ public class DocumentAssetRefPO {
         this.refScope = refScope;
     }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+    public LocalDateTime getCreateTime() {
+        return createTime;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
+    public void setCreateTime(LocalDateTime createTime) {
+        this.createTime = createTime;
     }
 
     public Integer getIsDeleted() {

@@ -217,10 +217,10 @@ CREATE TABLE doc_node (
     published_name_key  VARCHAR(200) NULL COMMENT '线上名称归一化唯一键',
     sort_order          INT          NOT NULL COMMENT '同级顺序，按10递增',
     node_version        BIGINT       NOT NULL DEFAULT 1 COMMENT '节点自身更新版本',
-    created_by          BIGINT       NOT NULL,
-    created_at          DATETIME     NOT NULL,
-    updated_by          BIGINT       NOT NULL,
-    updated_at          DATETIME     NOT NULL,
+    creator_id          BIGINT       NOT NULL,
+    create_time          DATETIME     NOT NULL,
+    updator_id          BIGINT       NOT NULL,
+    update_time          DATETIME     NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_doc_node_draft_name (parent_id, draft_name_key),
     UNIQUE KEY uk_doc_node_published_name (parent_id, published_name_key),
@@ -298,14 +298,14 @@ CREATE TABLE doc_asset (
     checksum         VARCHAR(128)  NULL,
     failure_code     VARCHAR(64)   NULL,
     ready_at         DATETIME      NULL,
-    created_by       BIGINT        NOT NULL,
-    created_at       DATETIME      NOT NULL,
-    updated_by       BIGINT        NOT NULL,
-    updated_at       DATETIME      NOT NULL,
+    creator_id       BIGINT        NOT NULL,
+    create_time       DATETIME      NOT NULL,
+    updator_id       BIGINT        NOT NULL,
+    update_time       DATETIME      NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_doc_asset_storage_key (storage_key),
     KEY idx_doc_asset_document_status (document_id, status),
-    KEY idx_doc_asset_status_updated (status, updated_at)
+    KEY idx_doc_asset_status_updated (status, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='文档图片与附件元数据';
 ```
 
@@ -332,7 +332,7 @@ CREATE TABLE doc_asset_ref (
     document_id  BIGINT       NOT NULL,
     asset_id     BIGINT       NOT NULL,
     ref_scope    VARCHAR(16)  NOT NULL COMMENT 'DRAFT或PUBLISHED',
-    created_at   DATETIME     NOT NULL,
+    create_time   DATETIME     NOT NULL,
     PRIMARY KEY (document_id, asset_id, ref_scope),
     KEY idx_doc_asset_ref_asset (asset_id, ref_scope)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='编辑稿与线上稿资源引用';
@@ -348,12 +348,12 @@ CREATE TABLE doc_asset_ref (
 CREATE TABLE doc_tree_meta (
     meta_id         TINYINT   NOT NULL,
     tree_revision   BIGINT    NOT NULL,
-    updated_by      BIGINT    NOT NULL,
-    updated_at      DATETIME  NOT NULL,
+    updator_id      BIGINT    NOT NULL,
+    update_time      DATETIME  NOT NULL,
     PRIMARY KEY (meta_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='文档树全局修订号';
 
-INSERT INTO doc_tree_meta(meta_id, tree_revision, updated_by, updated_at)
+INSERT INTO doc_tree_meta(meta_id, tree_revision, updator_id, update_time)
 VALUES (1, 1, 0, NOW());
 ```
 
@@ -701,8 +701,8 @@ UPDATE doc_node
 SET draft_name = #{draftTitle},
     draft_name_key = #{draftTitleKey},
     node_version = node_version + 1,
-    updated_by = #{operatorId},
-    updated_at = #{now}
+    updator_id = #{operatorId},
+    update_time = #{now}
 WHERE id = #{documentId}
   AND node_type = 'DOCUMENT';
 
